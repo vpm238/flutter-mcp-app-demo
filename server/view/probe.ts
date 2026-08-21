@@ -12,7 +12,14 @@
 
 type Verdict = "ok" | "bad" | "warn";
 
-export function renderProbe(appOrigin: string) {
+export function renderProbe(
+  appOrigin: string,
+  report?: (summary: string) => void,
+) {
+  // Every finding, collected so the probe can post them into the conversation.
+  // A rendered panel is only readable by whoever is looking at the screen; the
+  // model cannot see it, and neither can anyone being asked to debug it.
+  const findings: string[] = [];
   document.body.replaceChildren();
   document.body.style.cssText =
     "margin:0;padding:14px;font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;" +
@@ -40,7 +47,15 @@ export function renderProbe(appOrigin: string) {
     warn: "#b7791f",
   };
 
+  function record(key: string, value: string) {
+    const existing = findings.findIndex((f) => f.startsWith(`${key}: `));
+    const line = `${key}: ${value}`;
+    if (existing >= 0) findings[existing] = line;
+    else findings.push(line);
+  }
+
   function row(key: string, value: string, verdict?: Verdict) {
+    record(key, value);
     const line = document.createElement("div");
     line.style.cssText =
       "display:flex;gap:8px;padding:4px 0;border-bottom:1px solid rgba(128,128,128,.25)";
@@ -56,15 +71,18 @@ export function renderProbe(appOrigin: string) {
     return (text: string, next: Verdict) => {
       v.textContent = text;
       v.style.color = tint[next];
+      record(key, text);
     };
   }
 
   // A CSP violation hands us the policy that caused it — the one thing an
   // error page never tells you.
   document.addEventListener("securitypolicyviolation", (e) => {
-    cspBox.textContent =
+    const detail =
       `BLOCKED: ${e.violatedDirective}\nblocked URI: ${e.blockedURI}\n\n` +
       `full policy:\n${e.originalPolicy || "(not exposed)"}`;
+    cspBox.textContent = detail;
+    record("csp violation", detail);
   });
 
   row("location.origin", location.origin);
@@ -123,4 +141,15 @@ export function renderProbe(appOrigin: string) {
   document.head.appendChild(script);
 
   row("user agent", navigator.userAgent);
+
+  // Give the async checks time to settle, then post the report into the chat.
+  if (report) {
+    setTimeout(() => {
+      report(
+        "Showtime view diagnostics — the report below came from inside the " +
+          "host's view sandbox:\n\n" +
+          findings.map((f) => `- ${f}`).join("\n"),
+      );
+    }, 8000);
+  }
 }

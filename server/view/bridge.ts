@@ -64,7 +64,17 @@ function makeApp(): App {
     // because a tool pointing at a URI the host never registered renders
     // nothing at all — silently.
     if (data && (data as { probe?: string }).probe === "view-environment") {
-      renderProbe(window.__SHOWTIME_APP_URL?.replace(/\/app\/$/, "") ?? "");
+      renderProbe(
+        window.__SHOWTIME_APP_URL?.replace(/\/app\/$/, "") ?? "",
+        (summary) => {
+          // Post the findings as a turn so they are readable in the transcript,
+          // not only by whoever can see the rendered frame.
+          void app.sendMessage({
+            role: "user",
+            content: [{ type: "text", text: summary }],
+          });
+        },
+      );
       return;
     }
 
