@@ -216,6 +216,12 @@ function snapshotContext(context: Record<string, unknown> | undefined) {
     // answers coarse/none here whatever its webview claims to be, and an iPad
     // — which reports itself as a Macintosh — answers coarse with touch
     // points, which is the only way to tell it from a laptop.
+    // The size Flutter actually lays out against. Every sizing bug in this
+    // project turned on the gap between what the host offered, what we asked
+    // for, and what the frame ended up being — and this is the only one of the
+    // three that was missing from the report.
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight,
     pointerCoarse: matchMedia("(pointer: coarse)").matches,
     hoverNone: matchMedia("(hover: none)").matches,
     maxTouchPoints: navigator.maxTouchPoints ?? 0,
