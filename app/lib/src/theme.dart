@@ -208,7 +208,7 @@ class Palette {
   factory Palette.fromHost(HostContext host) {
     final base = host.isDark ? darkDefault : lightDefault;
     Color pick(String key, Color fallback) =>
-        parseCssColor(host.styles[key]) ?? fallback;
+        parseCssColor(host.styles[key], dark: host.isDark) ?? fallback;
 
     return Palette(
       brightness: base.brightness,
@@ -273,6 +273,8 @@ class Skin extends InheritedWidget {
     required this.persona,
     required this.palette,
     required this.currency,
+    this.fit = Fit.roomy,
+    this.requestRoom,
     required super.child,
   });
 
@@ -280,10 +282,31 @@ class Skin extends InheritedWidget {
   final Palette palette;
   final String currency;
 
+  /// How much room the host gave us. A sheet sized for a phone screen is not
+  /// the same as a sheet sized for a panel in a conversation.
+  final Fit fit;
+
+  /// Ask the host to make the view fullscreen, and wait until it has.
+  ///
+  /// A modal sheet is positioned against the Flutter viewport, which inside a
+  /// host is the iframe — and the iframe can be taller than the part of it the
+  /// user can actually see. A seat map opened in a panel that way is laid out
+  /// correctly and still invisible. Asking for the room first is the fix, and
+  /// it is also just the right behaviour on a phone.
+  final Future<void> Function()? requestRoom;
+
   static Skin of(BuildContext context) {
     final skin = context.dependOnInheritedWidgetOfExactType<Skin>();
     assert(skin != null, 'No Skin in scope');
     return skin!;
+  }
+
+  bool get isCompact => fit == Fit.compact;
+
+  /// Take the whole screen before opening something big, when there is not
+  /// enough of it. A no-op where the host does not offer fullscreen.
+  Future<void> makeRoom() async {
+    if (fit == Fit.compact) await requestRoom?.call();
   }
 
   bool get isIOS => persona == Persona.ios;
@@ -294,7 +317,8 @@ class Skin extends InheritedWidget {
   bool updateShouldNotify(Skin old) =>
       old.persona != persona ||
       old.palette != palette ||
-      old.currency != currency;
+      old.currency != currency ||
+      old.fit != fit;
 }
 
 // ---------------------------------------------------------------------------
@@ -302,11 +326,19 @@ class Skin extends InheritedWidget {
 // ---------------------------------------------------------------------------
 
 /// Parse the colour syntaxes a host is likely to hand us: hex, `rgb()`,
-/// `hsl()`, and `oklch()` (which modern design systems emit by default).
+/// `hsl()`, `oklch()` (which modern design systems emit by default), and
+/// `light-dark()`.
+///
+/// `light-dark()` is the one that has to be handled rather than skipped: a host
+/// that ships a single stylesheet for both themes sends every colour that way,
+/// and the naive parse takes the first `(` — which belongs to `light-dark`
+/// itself — and produces nonsense. Claude sends its entire palette like this,
+/// so getting it wrong means silently ignoring the host's theme and rendering
+/// the app's own defaults on the host's background.
 ///
 /// Returns null for anything unrecognised so callers can fall back rather than
 /// render a wrong colour confidently.
-Color? parseCssColor(String? input) {
+Color? parseCssColor(String? input, {bool dark = false}) {
   if (input == null) return null;
   final value = input.trim().toLowerCase();
   if (value.isEmpty || value == 'transparent' || value == 'inherit') return null;
@@ -316,8 +348,15 @@ Color? parseCssColor(String? input) {
   final open = value.indexOf('(');
   if (open < 0 || !value.endsWith(')')) return null;
   final fn = value.substring(0, open).trim();
-  final args = value
-      .substring(open + 1, value.length - 1)
+  final inner = value.substring(open + 1, value.length - 1);
+
+  if (fn == 'light-dark') {
+    final parts = _splitTopLevel(inner);
+    if (parts.length != 2) return null;
+    return parseCssColor(parts[dark ? 1 : 0], dark: dark);
+  }
+
+  final args = inner
       .replaceAll('/', ' ')
       .replaceAll(',', ' ')
       .split(RegExp(r'\s+'))
@@ -363,6 +402,29 @@ Color? parseCssColor(String? input) {
     default:
       return null;
   }
+}
+
+/// Split on commas that are not inside a nested function call.
+///
+/// `rgba(1, 2, 3, 1), rgba(4, 5, 6, 1)` is two arguments, not eight.
+List<String> _splitTopLevel(String input) {
+  final parts = <String>[];
+  final buffer = StringBuffer();
+  var depth = 0;
+  for (final rune in input.runes) {
+    final ch = String.fromCharCode(rune);
+    if (ch == '(') depth++;
+    if (ch == ')') depth--;
+    if (ch == ',' && depth == 0) {
+      parts.add(buffer.toString().trim());
+      buffer.clear();
+    } else {
+      buffer.write(ch);
+    }
+  }
+  final last = buffer.toString().trim();
+  if (last.isNotEmpty) parts.add(last);
+  return parts;
 }
 
 Color? _parseHex(String hex) {

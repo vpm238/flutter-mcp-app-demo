@@ -412,7 +412,15 @@ class _SeatsCard extends StatelessWidget {
 Future<void> openAndroidSeatSheet(
   BuildContext context,
   BookingController controller,
-) {
+) async {
+  // A modal sheet is positioned against the Flutter viewport, and inside a
+  // host that viewport is the iframe — which can be taller than the part of it
+  // the user can see. Opened in a conversation panel, the sheet lands below
+  // the visible area: laid out correctly, and completely invisible. Take the
+  // screen first, and only then measure.
+  await Skin.of(context).makeRoom();
+  if (!context.mounted) return;
+
   final palette = Skin.of(context).palette;
   final screen = MediaQuery.sizeOf(context);
 

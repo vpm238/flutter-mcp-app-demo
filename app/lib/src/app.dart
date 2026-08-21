@@ -111,6 +111,25 @@ class _ShowtimeAppState extends State<ShowtimeApp> {
     return cap != null && cap < kRoomyMinimum.height ? Fit.compact : Fit.roomy;
   }
 
+  /// Take the whole screen, and wait for the host to actually give it.
+  ///
+  /// The host resizes the frame in response, which changes MediaQuery — so a
+  /// sheet opened in the same frame would still be laid out against the old
+  /// size. One frame of settling is the difference between a seat map you can
+  /// see and one positioned below the visible panel.
+  Future<void> _goFullscreen() async {
+    if (!widget.host.isHosted) return;
+    if (_hostContext.displayMode == 'fullscreen') return;
+    if (!_hostContext.canGoFullscreen) return;
+    // A host that advertises fullscreen and then does not answer would
+    // otherwise hold the sheet closed until the request times out. Waiting is
+    // an optimisation; opening is the job.
+    await widget.host
+        .requestDisplayMode('fullscreen')
+        .timeout(const Duration(milliseconds: 1200), onTimeout: () => 'inline');
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+  }
+
   void _setPersona(Persona? persona) {
     setState(() => _override = persona);
     WidgetsBinding.instance.addPostFrameCallback((_) => _reportSize());
@@ -128,6 +147,8 @@ class _ShowtimeAppState extends State<ShowtimeApp> {
       persona: persona,
       palette: palette,
       currency: _controller.currency,
+      fit: _layout,
+      requestRoom: _goFullscreen,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Showtime',

@@ -59,6 +59,25 @@ function panel(): { width: number; height: number } {
   return { width, height };
 }
 
+/** `light-dark(<light>, <dark>)` for each token, as a real host emits them. */
+function lightDarkPalette(): Record<string, string> {
+  const pairs: Record<string, [string, string]> = {
+    "--color-background-primary": ["rgba(255, 255, 255, 1)", "rgba(48, 48, 46, 1)"],
+    "--color-background-secondary": ["rgba(245, 244, 237, 1)", "rgba(38, 38, 36, 1)"],
+    "--color-background-tertiary": ["rgba(250, 249, 245, 1)", "rgba(20, 20, 19, 1)"],
+    "--color-text-primary": ["rgba(20, 20, 19, 1)", "rgba(250, 249, 245, 1)"],
+    "--color-text-secondary": ["rgba(61, 61, 58, 1)", "rgba(194, 192, 182, 1)"],
+    "--color-text-tertiary": ["rgba(115, 114, 108, 1)", "rgba(156, 154, 146, 1)"],
+    "--color-border-primary": [
+      "rgba(31, 30, 29, 0.4)",
+      "rgba(222, 220, 209, 0.4)",
+    ],
+  };
+  return Object.fromEntries(
+    Object.entries(pairs).map(([k, [l, d]]) => [k, `light-dark(${l}, ${d})`]),
+  );
+}
+
 function hostContext() {
   const dark = themeSelect.value === "dark";
   return {
@@ -76,27 +95,12 @@ function hostContext() {
           safeAreaInsets: { top: 44, right: 0, bottom: 34, left: 0 },
         }
       : { platform: "web" as const, deviceCapabilities: { touch: false, hover: true } }),
-    styles: {
-      variables: dark
-        ? {
-            "--color-background-primary": "#262624",
-            "--color-background-secondary": "#30302e",
-            "--color-background-tertiary": "#3a3937",
-            "--color-text-primary": "#faf9f5",
-            "--color-text-secondary": "#b7b5ad",
-            "--color-text-tertiary": "#8a8880",
-            "--color-border-primary": "#43423f",
-          }
-        : {
-            "--color-background-primary": "#faf9f5",
-            "--color-background-secondary": "#ffffff",
-            "--color-background-tertiary": "#f0eee6",
-            "--color-text-primary": "#141413",
-            "--color-text-secondary": "#5e5d59",
-            "--color-text-tertiary": "#8a8880",
-            "--color-border-primary": "#e5e4df",
-          },
-    },
+    // Sent the way Claude sends them: one `light-dark()` value per token,
+    // rather than a pre-resolved colour per theme. A view that parses only the
+    // simple form silently discards the host's entire palette and renders its
+    // own defaults on the host's background — which is exactly what happened
+    // while this harness was emitting plain hex.
+    styles: { variables: lightDarkPalette() },
   };
 }
 
@@ -238,6 +242,19 @@ async function boot() {
       .join(" ");
     log("model-context", text);
     return {};
+  };
+
+  // Advertising fullscreen and then never answering the request is worse than
+  // not offering it: the view waits on a reply that never comes. Grant it, and
+  // actually grow the frame, so the view can be tested in the mode it asked for.
+  bridge.onrequestdisplaymode = async ({ mode }) => {
+    const granted = mode === "fullscreen" ? "fullscreen" : "inline";
+    if (iframe) {
+      iframe.style.height =
+        granted === "fullscreen" ? "90vh" : `${panel().height}px`;
+    }
+    log("display-mode", `${mode} → ${granted}`);
+    return { mode: granted };
   };
 
   bridge.addEventListener("sizechange", ({ width, height }) => {

@@ -25,6 +25,7 @@ Future<void> _pumpApp(WidgetTester tester, Persona persona) async {
 void main() {
   _personaResolution();
   _layoutFit();
+  _hostPalette();
 
   group('catalog', () {
     test('the generated house is stable for a given slot id', () {
@@ -348,6 +349,44 @@ void _layoutFit() {
       expect(tester.takeException(), isNull);
       // The two-column shell is what overflows here; the compact one is not.
       expect(find.byType(DesktopShell), findsNothing);
+    });
+  });
+}
+
+void _hostPalette() {
+  group('host colours', () {
+    // Claude ships one stylesheet for both themes, so every token arrives as
+    // light-dark(<light>, <dark>). A parser that takes the first '(' finds
+    // light-dark's own, produces nonsense, and falls back — silently throwing
+    // away the host's entire palette.
+    test('light-dark picks the side matching the theme', () {
+      const value = 'light-dark(rgba(255, 255, 255, 1), rgba(48, 48, 46, 1))';
+      expect(parseCssColor(value), const Color(0xFFFFFFFF));
+      expect(parseCssColor(value, dark: true), const Color(0xFF30302E));
+    });
+
+    test('light-dark survives nested commas and fractional alpha', () {
+      const value = 'light-dark(rgba(31, 30, 29, 0.4), rgba(222, 220, 209, 0.4))';
+      final light = parseCssColor(value)!;
+      final dark = parseCssColor(value, dark: true)!;
+      expect(light.a, closeTo(0.4, 0.01));
+      expect(dark.a, closeTo(0.4, 0.01));
+      expect(light, isNot(dark));
+    });
+
+    test('a malformed light-dark falls back rather than guessing', () {
+      expect(parseCssColor('light-dark(rgba(1,2,3,1))'), isNull);
+    });
+
+    test('the palette adopts the host theme end to end', () {
+      final host = HostContext(
+        theme: 'dark',
+        styles: const {
+          '--color-background-primary':
+              'light-dark(rgba(255, 255, 255, 1), rgba(48, 48, 46, 1))',
+        },
+      );
+      expect(Palette.fromHost(host).background, const Color(0xFF30302E));
     });
   });
 }

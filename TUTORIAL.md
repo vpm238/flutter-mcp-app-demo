@@ -1,7 +1,7 @@
 # Building an MCP App with Flutter web
 
 How to put a real, interactive, framework-heavy UI inside a chat conversation —
-and the nine things that will go wrong, most of which fail silently.
+and the eleven things that will go wrong, most of which fail silently.
 
 This is written from building [Showtime](./README.md): a seat picker that runs
 as an MCP App in Claude, drawn by Flutter web, rendering as Cupertino on iPhone,
@@ -128,7 +128,7 @@ us to the actual content of this tutorial.
 
 ---
 
-## 5. The nine things that will bite you
+## 5. The eleven things that will bite you
 
 ### 1. Test the capability; don't assume it
 
@@ -333,6 +333,52 @@ roughly 820×560 before it becomes a scrollbar, so below that a desktop persona
 should get the single-column layout — still Material, still pointer-first, but it
 fits.
 
+### 10. Host colours arrive as `light-dark()`, and a naive parser eats them
+
+A host that ships one stylesheet for both themes sends every token as
+`light-dark(<light>, <dark>)`. Claude sends its entire palette that way.
+
+A parser that reaches for the first `(` finds `light-dark`'s own, splits the
+inner text on commas, and gets `rgba(255` as an argument. It returns null, the
+caller falls back, and the view renders **its own defaults on the host's
+background** — with no error anywhere. Split on top-level commas and pick a side:
+
+```dart
+if (fn == 'light-dark') {
+  final parts = _splitTopLevel(inner);      // commas not inside nested parens
+  if (parts.length != 2) return null;
+  return parseCssColor(parts[dark ? 1 : 0], dark: dark);
+}
+```
+
+### 11. A modal is positioned against the frame, not against what's visible
+
+The one that looks most like magic. On a phone the seat picker simply did not
+appear — laid out correctly, entirely invisible.
+
+A sheet or dialog is positioned against the Flutter viewport, which inside a
+host is the iframe. The iframe can be taller than the part of it the user can
+see. A bottom sheet then lands below the visible panel, and the app looks
+broken with nothing in the logs.
+
+Compounding it: Claude sends **no `containerDimensions` at all** — `maxHeight`
+is null — so you cannot clamp your way out.
+
+The fix is the protocol, not arithmetic. `hostContext.availableDisplayModes`
+includes `fullscreen`, so take the screen before opening anything big:
+
+```dart
+Future<void> makeRoom() async {
+  if (fit == Fit.compact) await requestRoom?.call();   // ui/request-display-mode
+}
+```
+
+Two details that matter. **Wait a frame** after the host grants it — the frame
+resizes, MediaQuery changes, and a sheet opened in the same frame is still laid
+out against the old size. And **time the request out** (~1s): a host that
+advertises fullscreen and never answers would otherwise hold the sheet closed
+until the request expires. Waiting is an optimisation; opening is the job.
+
 ---
 
 ## 6. How to debug a view you cannot see
@@ -417,7 +463,10 @@ Before you ship a view:
 - [ ] Layout chosen by available space, not by platform
 - [ ] Device read from `hostContext`, with the user agent as fallback
 - [ ] Assets carry `Access-Control-Allow-Origin` and `Cross-Origin-Resource-Policy`
-- [ ] Dev host enforces a CSP, caps the panel, and mirrors production headers
+- [ ] Modals request fullscreen first on a compact panel, with a timeout
+- [ ] Host colours parsed including `light-dark()`
+- [ ] Dev host enforces a CSP, caps the panel, mirrors production headers, and
+      sends host colours in the same syntax the real host uses
 
 The through-line, if there is one: **every assumption I made about the host was
 wrong, and every one of them was cheap to measure.** The eight-byte WebAssembly
