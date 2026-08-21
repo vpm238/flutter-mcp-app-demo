@@ -88,12 +88,18 @@ async function boot() {
   const tools = await client.listTools();
   log("tools/list", tools.tools.map((t) => t.name).join(", "));
 
-  const args = JSON.parse(toolSelect.value) as Record<string, unknown>;
+  // A `__tool` key in the selected args picks a different tool, so the
+  // diagnostics panel can be driven from here too.
+  const selected = JSON.parse(toolSelect.value) as Record<string, unknown>;
+  const toolName = (selected.__tool as string) ?? "book_show_seats";
+  const args = { ...selected };
+  delete args.__tool;
+
   const result = (await client.callTool({
-    name: "book_show_seats",
+    name: toolName,
     arguments: args,
   })) as CallToolResult;
-  log("tools/call", `book_show_seats ${JSON.stringify(args)}`);
+  log("tools/call", `${toolName} ${JSON.stringify(args)}`);
 
   const resource = await client.readResource({ uri: VIEW_URI });
   const html = String(resource.contents[0]?.text ?? "");
@@ -137,13 +143,27 @@ async function boot() {
     log("size", `${Math.round(width ?? 0)}×${Math.round(height ?? 0)}`);
   });
 
+  // `connect()` resolves once the transport is attached — it does NOT wait for
+  // the view's ui/initialize. tool-input and tool-result are one-shot events,
+  // so sending them before the view has finished its handshake drops them on
+  // the floor, silently. Wait for the `initialized` event instead.
+  const initialized = new Promise<void>((resolve) => {
+    bridge!.addEventListener("initialized", () => resolve());
+  });
+
   // Attach to the frame's WindowProxy first, then navigate it. The proxy
   // identity survives the navigation, so nothing the view sends is missed.
-  const connected = bridge.connect(
+  await bridge.connect(
     new PostMessageTransport(iframe.contentWindow!, iframe.contentWindow!),
   );
   iframe.setAttribute("srcdoc", html);
-  await connected;
+
+  await Promise.race([
+    initialized,
+    new Promise<void>((_, reject) =>
+      setTimeout(() => reject(new Error("view never sent ui/notifications/initialized")), 20000),
+    ),
+  ]);
   log("host", "view initialized");
 
   await bridge.sendToolInput({ arguments: args });
