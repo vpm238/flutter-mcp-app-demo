@@ -15,7 +15,7 @@ type Verdict = "ok" | "bad" | "warn";
 export function renderProbe(
   appOrigin: string,
   report?: (summary: string) => void,
-  context?: { mount?: string; frameAttempts?: Array<{ url: string; note: string }> },
+  context?: { mount?: string; build?: string },
 ) {
   // Every finding, collected so the probe can post them into the conversation.
   // A rendered panel is only readable by whoever is looking at the screen; the
@@ -89,12 +89,7 @@ export function renderProbe(
   // What the shell already decided, before re-deriving anything. This is the
   // part that says which of the two mounts this host actually permitted.
   if (context?.mount) row("mount chosen", context.mount);
-  if (context?.frameAttempts?.length) {
-    row(
-      "frame URLs tried",
-      context.frameAttempts.map((a) => `${a.url} (${a.note})`).join("\n"),
-    );
-  }
+  if (context?.build) row("shell build", context.build);
 
   row("location.origin", location.origin);
   row("opaque origin", String(location.origin === "null"));
@@ -114,9 +109,8 @@ export function renderProbe(
     row("WebAssembly", `BLOCKED — ${(err as Error).message}`, "bad");
   }
 
-  // The thing that is actually failing today. Both header variants get tested,
-  // because "the frame is blocked" and "the frame is blocked *when it carries
-  // COEP*" call for completely different fixes.
+  // Whether this host will embed a frame on our origin at all — the thing
+  // `frameDomains` is supposed to grant, and does not everywhere.
   //
   // The signal is a message from the app inside, not the frame's `load` event:
   // a refused frame loads the browser's own error page and reports that as a
@@ -130,10 +124,7 @@ export function renderProbe(
     settle("LOADED — the app inside is running", "ok");
   });
 
-  for (const variant of [
-    { path: "/app/", label: "nested iframe (COEP)" },
-    { path: "/embed/", label: "nested iframe (no COEP)" },
-  ]) {
+  for (const variant of [{ path: "/app/", label: "nested iframe" }]) {
     const frameResult = row(variant.label, "testing…", "warn");
     const probeFrame = document.createElement("iframe");
     probeFrame.style.cssText =

@@ -19,12 +19,9 @@
  *   neither paints          -> render the environment report, in-view and into
  *                              the conversation, instead of a blank panel.
  *
- * The nested path then has its own choice to make, for the same reason: whether
- * a host embeds the frame depends on response headers it will not tell us
- * about, so the frame walks a list of ways to serve the same build — with and
- * without COEP — until one of them talks back. A refused frame still fires
- * `load` for the browser's error page, so "the app spoke" is the only signal
- * worth waiting on.
+ * In Claude the answer is the first one: `script-src` grants `'unsafe-eval'`,
+ * so CanvasKit compiles here and no second document is involved. The nested
+ * path remains for hosts that refuse WebAssembly but do honour `frameDomains`.
  *
  * Both paths present the identical `showtimeBridge` surface to the Dart side;
  * they differ only in whether the calls cross a postMessage boundary.
@@ -57,9 +54,6 @@ const TOOL_RESULT_GRACE_MS = 1500;
 /** How long Flutter gets to paint before we report the environment instead. */
 const FIRST_FRAME_DEADLINE_MS = 12000;
 
-/** How long one nested-frame candidate gets before we try the next. */
-const FRAME_DEADLINE_MS = 3500;
-
 const ORIGIN = window.__SHOWTIME_ORIGIN ?? "";
 const BUILD = window.__SHOWTIME_BUILD ?? "unknown";
 const APP_URL = `${ORIGIN}/app/`;
@@ -89,19 +83,6 @@ function beacon(stage: string, note?: string) {
 
 beacon("shell-booted");
 
-/**
- * Ways to serve the same build, in the order worth trying.
- *
- * They differ only in response headers, which is precisely the thing an
- * embedding host judges the frame on and precisely the thing its error page
- * declines to name. Trying them in turn is cheaper than reasoning about a
- * policy we cannot read.
- */
-const FRAME_CANDIDATES = [
-  { url: APP_URL, note: "with COEP: require-corp" },
-  { url: `${ORIGIN}/embed/`, note: "no COEP" },
-];
-
 const status = document.getElementById("status");
 
 let latestToolResult: unknown = null;
@@ -112,12 +93,6 @@ const firstToolResult = new Promise<unknown>((resolve) => {
 
 /** Set once anything has painted, so the watchdog knows to stand down. */
 let painted = false;
-
-/** Set once the nested app has spoken — proof the frame really loaded. */
-let alive = false;
-
-/** Which frame URLs were tried, for the report if none of them work. */
-const frameAttempts: Array<{ url: string; note: string }> = [];
 
 /** Which mount the wasm probe selected, named for the report. */
 let chosenMount = "undecided";
@@ -170,7 +145,7 @@ let app = makeApp();
 
 /** What the shell already knows by the time the report runs. */
 function probeContext() {
-  return { mount: chosenMount, frameAttempts, build: BUILD };
+  return { mount: chosenMount, build: BUILD };
 }
 
 /** Post a report as a turn, so it is readable by the model and not only on screen. */
@@ -449,10 +424,9 @@ function mountNested() {
     const message = event.data as ChildMessage;
     if (!message || message.channel !== "showtime") return;
 
-    // The inner app is alive and talking — which is the only proof that counts.
-    // A frame the host refused still fires `load` for its error page, so this,
-    // not the load event, is what stops the candidate walk.
-    alive = true;
+    // The inner app is alive and talking. That, not the frame's `load` event,
+    // is the proof that counts: a frame the host refused still fires `load`
+    // for the browser's error page.
     painted = true;
     status?.remove();
 
@@ -497,23 +471,7 @@ function mountNested() {
     }
   });
 
-  // Walk the candidates until one of them talks back. A refused frame renders
-  // the browser's own error page and reports `load` for it, so a timer on
-  // "did the app say anything" is the only reliable signal.
-  void (async () => {
-    for (const candidate of FRAME_CANDIDATES) {
-      frameAttempts.push(candidate);
-      api.log("info", `trying the app frame at ${candidate.url} (${candidate.note})`);
-      frame.src = candidate.url;
-
-      await new Promise((resolve) => setTimeout(resolve, FRAME_DEADLINE_MS));
-      if (alive) {
-        api.log("info", `the app frame loaded from ${candidate.url}`);
-        return;
-      }
-    }
-    api.log("error", "every app frame candidate was refused by this host");
-  })();
+  frame.src = APP_URL;
 }
 
 // ---------------------------------------------------------------------------

@@ -131,14 +131,6 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === "/app") return send(res, 301, { location: "/app/" }, "");
 
-  // Mirrors the Worker's /embed/: the same build without COEP, so the shell can
-  // try both when a host refuses the frame and will not say why.
-  if (url.pathname === "/embed" || url.pathname.startsWith("/embed/")) {
-    return serveStatic(res, publicDir, url.pathname.replace(/^\/embed/, "/app") || "/app/", {
-      omit: ["cross-origin-embedder-policy"],
-    });
-  }
-
   if (url.pathname === "/") {
     return send(res, 302, { location: "/app/" }, "");
   }
@@ -157,7 +149,7 @@ server.listen(PORT, HOST, () => {
   console.log(`  dev host       http://${HOST}:${PORT}/devhost/`);
 });
 
-function serveStatic(res, root, pathname, { omit = [] } = {}) {
+function serveStatic(res, root, pathname) {
   const decoded = decodeURIComponent(pathname);
   let filePath = join(root, normalize(decoded).replace(/^(\.\.[/\\])+/, ""));
   if (!filePath.startsWith(root)) return send(res, 403, {}, "Forbidden");
@@ -167,14 +159,11 @@ function serveStatic(res, root, pathname, { omit = [] } = {}) {
   }
   if (!existsSync(filePath)) return send(res, 404, CORS, "Not found");
 
-  const headers = {
+  res.writeHead(200, {
     "content-type": MIME[extname(filePath)] ?? "application/octet-stream",
     "cache-control": "no-cache",
     ...ASSET_HEADERS,
-  };
-  for (const key of omit) delete headers[key];
-
-  res.writeHead(200, headers);
+  });
   createReadStream(filePath).pipe(res);
 }
 
