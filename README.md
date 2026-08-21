@@ -26,6 +26,10 @@ on Android, and a pointer-first desktop app on a laptop. There is a
 **Preview as** switcher in the corner so you can see all three without three
 devices on the desk.
 
+**New to MCP Apps, or hit a wall building one?** [TUTORIAL.md](./TUTORIAL.md)
+is the how-to: the protocol in eight methods, and the nine things that go wrong
+— most of which fail silently — with the fix that worked for each.
+
 ## What it demonstrates
 
 That an interactive view can target a *protocol* rather than a platform and
