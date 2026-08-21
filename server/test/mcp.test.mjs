@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { handleRpc, VIEW_URI } from "../src/mcp.mjs";
+import { DIAGNOSE_URI, handleRpc, VIEW_URI } from "../src/mcp.mjs";
 import {
   confirmationCode,
   describeSeats,
@@ -45,10 +45,17 @@ test("every tool points at the view, in both the current and legacy meta keys", 
   const { tools } = (await call(rpc("tools/list"))).result;
   assert.deepEqual(
     tools.map((t) => t.name),
-    ["book_show_seats", "list_showtimes", "get_seat_map", "confirm_booking"],
+    [
+      "book_show_seats",
+      "list_showtimes",
+      "get_seat_map",
+      "diagnose_view",
+      "confirm_booking",
+    ],
   );
   for (const tool of tools) {
-    assert.equal(tool._meta.ui.resourceUri, VIEW_URI);
+    const expected = tool.name === "diagnose_view" ? DIAGNOSE_URI : VIEW_URI;
+    assert.equal(tool._meta.ui.resourceUri, expected, tool.name);
   }
   // Older hosts only read the flat key; the entry tool must carry both.
   const entry = tools.find((t) => t.name === "book_show_seats");
@@ -241,4 +248,18 @@ test("static assets carry the headers the sandboxed frame needs", () => {
   // Without COEP the browser refuses the frame outright under a
   // `require-corp` embedder — CORP covers subresources, not documents.
   assert.match(rule, /Cross-Origin-Embedder-Policy:\s*require-corp/i);
+});
+
+test("the diagnostic view is plain HTML with no wasm and no build dependency", async () => {
+  const { contents } = (await call(rpc("resources/read", { uri: DIAGNOSE_URI }))).result;
+  const [content] = contents;
+
+  assert.equal(content.mimeType, "text/html;profile=mcp-app");
+  // It has to render under the strictest policy a host might apply, so it
+  // asks for every grant and depends on nothing that could itself be blocked.
+  assert.deepEqual(content._meta.ui.csp.frameDomains, [ORIGIN]);
+  assert.deepEqual(content._meta.ui.csp.connectDomains, [ORIGIN]);
+  assert.deepEqual(content._meta.ui.csp.resourceDomains, [ORIGIN]);
+  assert.ok(!/<script[^>]+src=/.test(content.text), "no external scripts");
+  assert.match(content.text, /securitypolicyviolation/);
 });

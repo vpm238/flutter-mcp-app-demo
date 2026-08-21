@@ -26,6 +26,7 @@ import {
   seatMapFor,
   slotsFor,
 } from "./domain.mjs";
+import { DIAGNOSE_URI, renderDiagnoseHtml } from "./diagnose.mjs";
 import { renderViewHtml } from "./view.mjs";
 
 export const SERVER_INFO = {
@@ -35,6 +36,7 @@ export const SERVER_INFO = {
 };
 
 export const VIEW_URI = "ui://showtime/booking.html";
+export { DIAGNOSE_URI };
 
 const SUPPORTED_PROTOCOLS = ["2026-01-26", "2025-11-25", "2025-06-18", "2025-03-26"];
 const DEFAULT_PROTOCOL = "2025-06-18";
@@ -121,6 +123,20 @@ const TOOLS = [
     _meta: { ui: { resourceUri: VIEW_URI, visibility: ["app"] } },
   },
   {
+    name: "diagnose_view",
+    title: "Diagnose the view environment",
+    description:
+      "Render a diagnostic panel that reports what this host's view sandbox " +
+      "allows: WebAssembly, nested frames, fetch and script loads from the " +
+      "server's origin, and the Content-Security-Policy itself. Use when the " +
+      "booking view fails to render, to find out why.",
+    inputSchema: { type: "object", properties: {} },
+    _meta: {
+      ui: { resourceUri: DIAGNOSE_URI, visibility: ["model"], prefersBorder: true },
+      "ui/resourceUri": DIAGNOSE_URI,
+    },
+  },
+  {
     name: "confirm_booking",
     title: "Confirm booking",
     description:
@@ -173,6 +189,14 @@ export async function handleRpc(message, { origin }) {
         return ok(id, {
           resources: [
             {
+              uri: DIAGNOSE_URI,
+              name: "Showtime view diagnostics",
+              description:
+                "Reports what the host's view sandbox allows, and the CSP.",
+              mimeType: "text/html;profile=mcp-app",
+              _meta: { ui: diagnoseMeta(origin) },
+            },
+            {
               uri: VIEW_URI,
               name: "Showtime booking view",
               description:
@@ -185,9 +209,22 @@ export async function handleRpc(message, { origin }) {
         });
 
       case "resources/templates/list":
+        // (diagnostic resource is listed above)
         return ok(id, { resourceTemplates: [] });
 
       case "resources/read": {
+        if (params.uri === DIAGNOSE_URI) {
+          return ok(id, {
+            contents: [
+              {
+                uri: DIAGNOSE_URI,
+                mimeType: "text/html;profile=mcp-app",
+                text: renderDiagnoseHtml({ origin }),
+                _meta: { ui: diagnoseMeta(origin) },
+              },
+            ],
+          });
+        }
         if (params.uri !== VIEW_URI) {
           return err(id, -32602, `Unknown resource: ${params.uri}`);
         }
@@ -221,6 +258,21 @@ export async function handleRpc(message, { origin }) {
  * has to allow it. Everything else the outer shell needs is inline, which the
  * spec's default policy already permits.
  */
+/**
+ * The probe asks for every domain grant the spec offers, so that each check it
+ * runs is testing the host's behaviour rather than our own under-declaration.
+ */
+function diagnoseMeta(origin) {
+  return {
+    csp: {
+      frameDomains: [origin],
+      connectDomains: [origin],
+      resourceDomains: [origin],
+    },
+    prefersBorder: true,
+  };
+}
+
 function viewMeta(origin) {
   return {
     csp: {
@@ -241,6 +293,19 @@ async function callTool(name, args) {
       return seatMapResult(args);
     case "confirm_booking":
       return confirmResult(args);
+    case "diagnose_view":
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              "Rendering the view diagnostics panel. It reports whether this " +
+              "host allows WebAssembly, nested frames, and requests to the " +
+              "server's origin, and prints the CSP if one blocks something.",
+          },
+        ],
+        structuredContent: { probe: "view-environment" },
+      };
     default:
       return toolError(`Unknown tool: ${name}`);
   }
