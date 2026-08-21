@@ -63,6 +63,36 @@ export default {
       return Response.redirect(`${url.origin}/app/`, 301);
     }
 
+    // The same document, minus COEP.
+    //
+    // `/app/` carries `Cross-Origin-Embedder-Policy: require-corp` because a
+    // `require-corp` embedder refuses a nested cross-origin frame that does not
+    // send it. But that header is a demand as well as a permit, and we cannot
+    // see the embedder's policy from out here — so when a host refuses the
+    // frame, an error page cannot tell us which of the two it wanted.
+    //
+    // Serving the build a second way turns that into something the shell can
+    // just try. No duplicated bytes: the same asset, re-fetched under its real
+    // path with the header dropped. Flutter is built with `--base-href /app/`,
+    // so the document pulls its own assets from /app/ either way, and COEP
+    // constrains documents rather than subresources.
+    if (url.pathname === "/embed" || url.pathname.startsWith("/embed/")) {
+      const target = new URL(request.url);
+      target.pathname = url.pathname.replace(/^\/embed/, "/app");
+      if (target.pathname === "/app") target.pathname = "/app/";
+
+      const asset = await env.ASSETS.fetch(new Request(target, request));
+      const headers = new Headers(asset.headers);
+      headers.delete("cross-origin-embedder-policy");
+      headers.set("access-control-allow-origin", "*");
+      headers.set("cross-origin-resource-policy", "cross-origin");
+      return new Response(asset.body, {
+        status: asset.status,
+        statusText: asset.statusText,
+        headers,
+      });
+    }
+
     return withAssetHeaders(await env.ASSETS.fetch(request));
   },
 };

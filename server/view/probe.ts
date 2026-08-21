@@ -15,6 +15,7 @@ type Verdict = "ok" | "bad" | "warn";
 export function renderProbe(
   appOrigin: string,
   report?: (summary: string) => void,
+  context?: { mount?: string; frameAttempts?: Array<{ url: string; note: string }> },
 ) {
   // Every finding, collected so the probe can post them into the conversation.
   // A rendered panel is only readable by whoever is looking at the screen; the
@@ -85,6 +86,16 @@ export function renderProbe(
     record("csp violation", detail);
   });
 
+  // What the shell already decided, before re-deriving anything. This is the
+  // part that says which of the two mounts this host actually permitted.
+  if (context?.mount) row("mount chosen", context.mount);
+  if (context?.frameAttempts?.length) {
+    row(
+      "frame URLs tried",
+      context.frameAttempts.map((a) => `${a.url} (${a.note})`).join("\n"),
+    );
+  }
+
   row("location.origin", location.origin);
   row("opaque origin", String(location.origin === "null"));
   row(
@@ -103,29 +114,41 @@ export function renderProbe(
     row("WebAssembly", `BLOCKED — ${(err as Error).message}`, "bad");
   }
 
-  // The thing that is actually failing today.
-  const frameResult = row("nested iframe", "testing…", "warn");
-  const probeFrame = document.createElement("iframe");
-  probeFrame.style.cssText =
-    "position:absolute;left:-9999px;width:1px;height:1px;opacity:.01";
-  probeFrame.src = `${appOrigin}/app/?chrome=off`;
-  let settled = false;
-  probeFrame.addEventListener("load", () => {
-    if (settled) return;
-    settled = true;
-    frameResult(`LOADED from ${appOrigin}`, "ok");
+  // The thing that is actually failing today. Both header variants get tested,
+  // because "the frame is blocked" and "the frame is blocked *when it carries
+  // COEP*" call for completely different fixes.
+  //
+  // The signal is a message from the app inside, not the frame's `load` event:
+  // a refused frame loads the browser's own error page and reports that as a
+  // successful load, which is exactly how this failure stayed unreadable.
+  const speaking = new Map<Window, (text: string, v: Verdict) => void>();
+  window.addEventListener("message", (event) => {
+    const settle = event.source ? speaking.get(event.source as Window) : undefined;
+    if (!settle) return;
+    if ((event.data as { channel?: string })?.channel !== "showtime") return;
+    speaking.delete(event.source as Window);
+    settle("LOADED — the app inside is running", "ok");
   });
-  probeFrame.addEventListener("error", () => {
-    if (settled) return;
-    settled = true;
-    frameResult("ERROR event — the frame was refused", "bad");
-  });
-  document.body.appendChild(probeFrame);
-  setTimeout(() => {
-    if (settled) return;
-    settled = true;
-    frameResult("NO load event after 6s — blocked before loading", "bad");
-  }, 6000);
+
+  for (const variant of [
+    { path: "/app/", label: "nested iframe (COEP)" },
+    { path: "/embed/", label: "nested iframe (no COEP)" },
+  ]) {
+    const frameResult = row(variant.label, "testing…", "warn");
+    const probeFrame = document.createElement("iframe");
+    probeFrame.style.cssText =
+      "position:absolute;left:-9999px;width:1px;height:1px;opacity:.01";
+    probeFrame.src = `${appOrigin}${variant.path}?chrome=off`;
+    probeFrame.addEventListener("error", () => frameResult("ERROR event", "bad"));
+    document.body.appendChild(probeFrame);
+    if (probeFrame.contentWindow) speaking.set(probeFrame.contentWindow, frameResult);
+
+    setTimeout(() => {
+      if (!probeFrame.contentWindow || !speaking.has(probeFrame.contentWindow)) return;
+      speaking.delete(probeFrame.contentWindow);
+      frameResult("REFUSED — nothing spoke from inside after 7s", "bad");
+    }, 7000);
+  }
 
   const fetchResult = row("fetch our origin", "testing…", "warn");
   fetch(`${appOrigin}/health`)
@@ -150,6 +173,6 @@ export function renderProbe(
           "host's view sandbox:\n\n" +
           findings.map((f) => `- ${f}`).join("\n"),
       );
-    }, 8000);
+    }, 9000);
   }
 }
