@@ -1,0 +1,20 @@
+# Cloudflare Workers deployment.
+#
+#   npm run deploy      # builds Flutter + the bridge, then `wrangler deploy`
+#
+# One Worker serves both halves: `/mcp` (the MCP endpoint you add to Claude as a
+# custom connector) and `/app/**` (the Flutter build the view frame loads).
+# Keeping them on one origin is what makes the app's own fetches same-origin.
+
+name = "showtime-mcp"
+main = "src/worker.mjs"
+compatibility_date = "2026-01-15"
+
+# Static assets are matched first; anything with no matching file — /mcp, /,
+# /health — falls through to the Worker.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[observability]
+enabled = true

@@ -1,0 +1,36 @@
+name: showtime
+description: "Showtime — an MCP App view built with Flutter web. Adaptive date/time and seat pickers that render Cupertino on iOS, Material 3 on Android, and a wide pointer-first layout on desktop."
+publish_to: "none"
+version: 1.0.0
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  intl: ^0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  fonts:
+    # Inter stands in for SF Pro: CanvasKit rasterizes its own text, so it cannot
+    # borrow the host OS UI font. Inter is the closest open metric-compatible face.
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700

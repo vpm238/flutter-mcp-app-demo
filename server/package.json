@@ -1,0 +1,24 @@
+{
+  "name": "showtime-mcp-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP App server for Showtime \u2014 a Flutter web seat picker that renders inline in Claude.",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:all": "node build.mjs --with-flutter",
+    "dev": "node build.mjs && node src/dev-server.mjs",
+    "pretest": "node build.mjs",
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "fixture": "node tools/gen-parity-fixture.mjs",
+    "deploy": "node build.mjs --with-flutter && wrangler deploy"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "wrangler": "^4.0.0"
+  }
+}

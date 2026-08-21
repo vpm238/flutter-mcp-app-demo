@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Showtime · dev host</title>
+<style>
+  :root { color-scheme: light dark; --bg: #faf9f5; --fg: #141413; --dim: #6b6a64; --line: #e5e4df; --card: #fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1b1b19; --fg: #f5f4ef; --dim: #9c9a92; --line: #3a3936; --card: #262624; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 400 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
+    padding: .75rem 1rem; border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: .95rem; margin: 0 auto 0 0; font-weight: 600; letter-spacing: -.01em; }
+  header .hint { color: var(--dim); font-size: .8rem; }
+  select, button {
+    font: inherit; font-size: .85rem; padding: .35rem .6rem;
+    border-radius: 7px; border: 1px solid var(--line);
+    background: var(--card); color: inherit;
+  }
+  button { cursor: pointer; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 1rem; padding: 1rem; align-items: start; }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+  #frame {
+    border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card);
+  }
+  #transcript {
+    border: 1px solid var(--line); border-radius: 12px; background: var(--card);
+    max-height: 760px; overflow: auto; padding: .5rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+  }
+  .row { display: flex; gap: .5rem; padding: .35rem .25rem; border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .tag {
+    flex: 0 0 auto; color: var(--dim); text-transform: uppercase;
+    letter-spacing: .04em; font-size: 9.5px; padding-top: .15rem; min-width: 84px;
+  }
+  .detail { white-space: pre-wrap; word-break: break-word; }
+  .row.error .detail { color: #c53030; }
+  .row.ui\/message .detail, .row.model-context .detail { color: #2f855a; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Showtime · dev host</h1>
+  <span class="hint">a real MCP Apps host: streamable HTTP + AppBridge, sandboxed frame</span>
+  <label>theme
+    <select id="theme">
+      <option value="light">light</option>
+      <option value="dark">dark</option>
+    </select>
+  </label>
+  <label>tool args
+    <select id="tool-args">
+      <option value='{"party_size":2}'>party_size: 2</option>
+      <option value='{"party_size":4}'>party_size: 4</option>
+      <option value='{"show":"neon-orchestra","party_size":2}'>neon-orchestra</option>
+      <option value='{"show":"coriolanus","party_size":3}'>coriolanus</option>
+    </select>
+  </label>
+  <button id="reload">reload view</button>
+</header>
+<main>
+  <div id="frame"></div>
+  <div id="transcript"></div>
+</main>
+<script src="host.js"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "name": "flutter-mcp-app-demo",
+  "owner": {
+    "name": "vpm238",
+    "url": "https://github.com/vpm238"
+  },
+  "metadata": {
+    "description": "Showtime — an MCP App built with Flutter web, with pickers that render native-feeling on every platform from one build.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "showtime",
+      "source": "./plugin",
+      "description": "Book theatre seats in an interactive picker built with Flutter web — Cupertino on iOS, Material 3 on Android, pointer-first on a laptop, from one build.",
+      "version": "1.0.0",
+      "author": {
+        "name": "vpm238"
+      },
+      "keywords": ["mcp-app", "flutter", "interactive-ui"]
+    }
+  ]
+}

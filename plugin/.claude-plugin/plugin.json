@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "showtime",
+  "displayName": "Showtime",
+  "version": "1.0.0",
+  "description": "Book theatre seats through an interactive picker that renders inline in the conversation \u2014 Cupertino on iOS, Material 3 on Android, a wide pointer-first layout on a laptop.",
+  "author": {
+    "name": "vpm238",
+    "url": "https://github.com/vpm238"
+  },
+  "homepage": "https://github.com/vpm238/flutter-mcp-app-demo",
+  "repository": "https://github.com/vpm238/flutter-mcp-app-demo",
+  "license": "MIT",
+  "keywords": [
+    "mcp-app",
+    "flutter",
+    "tickets",
+    "interactive-ui",
+    "seat-picker"
+  ],
+  "userConfig": {
+    "mcp_url": {
+      "type": "string",
+      "title": "Showtime MCP endpoint",
+      "description": "The /mcp URL of your deployed Showtime worker, e.g. https://showtime-mcp.<your-subdomain>.workers.dev/mcp \u2014 the Deploy Showtime GitHub Action prints it in its job summary.",
+      "required": true
+    }
+  },
+  "mcpServers": {
+    "showtime": {
+      "type": "http",
+      "url": "${user_config.mcp_url}"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+.DS_Store
+*.log
+node_modules/
+
+# Build outputs — regenerate with `cd server && npm run build:all`
+app/build/
+app/.dart_tool/
+app/.flutter-plugins-dependencies
+server/public/app/
+server/src/generated/
+server/devhost/host.js
+server/.wrangler/
+
+# secrets — never commit
+.env
+.dev.vars
