@@ -32,10 +32,25 @@ import { renderViewHtml } from "./view.mjs";
 export const SERVER_INFO = {
   name: "showtime",
   title: "Showtime",
-  version: "1.0.0",
+  version: "1.1.0",
 };
 
-export const VIEW_URI = "ui://showtime/booking.html";
+/**
+ * The view's URI, and why it has a version in it.
+ *
+ * A host registers a connector's resources once and caches what it read. We
+ * have watched Claude render a build several deploys old — the probe reported
+ * findings from a version whose code no longer existed — so the content behind
+ * this URI is not reliably refetched. A new URI is a new cache key, which is
+ * the one lever a server actually has.
+ *
+ * The previous URI is still served (see `resources/read`) with the *current*
+ * HTML, so a registration that is stale in name still gets a correct view.
+ */
+export const VIEW_URI = "ui://showtime/booking-v2.html";
+
+/** Registrations made before the rename still point here. */
+const LEGACY_VIEW_URIS = ["ui://showtime/booking.html"];
 
 const SUPPORTED_PROTOCOLS = ["2026-01-26", "2025-11-25", "2025-06-18", "2025-03-26"];
 const DEFAULT_PROTOCOL = "2025-06-18";
@@ -242,13 +257,16 @@ export async function handleRpc(message, { origin }) {
         return ok(id, { resourceTemplates: [] });
 
       case "resources/read": {
-        if (params.uri !== VIEW_URI) {
+        // Answer to the old URI as well as the current one: a host whose
+        // registration predates the rename should still get today's view
+        // rather than an error, and it costs nothing to say yes.
+        if (params.uri !== VIEW_URI && !LEGACY_VIEW_URIS.includes(params.uri)) {
           return err(id, -32602, `Unknown resource: ${params.uri}`);
         }
         return ok(id, {
           contents: [
             {
-              uri: VIEW_URI,
+              uri: params.uri,
               mimeType: "text/html;profile=mcp-app",
               text: renderViewHtml({ origin }),
               _meta: { ui: viewMeta(origin) },

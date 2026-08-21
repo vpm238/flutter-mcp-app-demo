@@ -332,3 +332,17 @@ test("the ui:// resource stays small enough to hand a host", async () => {
   const kb = contents[0].text.length / 1024;
   assert.ok(kb < 40, `the view resource is ${kb.toFixed(0)} kB; it should stay well under 40`);
 });
+
+test("a stale registration still gets today's view, not an error", async () => {
+  // Hosts register a connector's resources once and cache what they read. We
+  // have watched Claude render a build several deploys old, so the URI a host
+  // asks for may predate the current one. Answering it with the current HTML
+  // costs nothing and is the difference between a working view and a 404.
+  const legacy = "ui://showtime/booking.html";
+  const response = await call(rpc("resources/read", { uri: legacy }));
+  const [content] = response.result.contents;
+
+  assert.equal(content.uri, legacy, "echo back the URI that was asked for");
+  assert.equal(content.mimeType, "text/html;profile=mcp-app");
+  assert.match(content.text, /__SHOWTIME_BUILD/, "and serve the current shell");
+});
