@@ -58,50 +58,65 @@ Concretely:
 Flutter web renders through CanvasKit, which is WebAssembly — and since 3.29
 there is no other renderer. MCP App views run under a host-built CSP whose
 `script-src` is `'self' 'unsafe-inline'` plus whatever origins the server
-declares. It does **not** include `'wasm-unsafe-eval'`, and there is no field to
-ask for it ([ext-apps#605]). A Flutter build dropped straight into the view
-frame is a blank canvas.
+declares. Whether it also carries `'wasm-unsafe-eval'` is the host's choice, and
+there is no field to ask for it ([ext-apps#605]). Where it is absent, a Flutter
+build dropped into the view frame is a blank canvas.
 
-The way through is that **CSP is per-document and a cross-origin child does not
-inherit its parent's.** Only local-scheme children (`srcdoc`, `blob:`,
-`about:blank`) inherit one; a real `https://` child gets its policy from its own
-response headers. So the `ui://` resource is a ~4 kB shell that holds the
-protocol connection and nests one iframe served from our own Worker origin,
-where WebAssembly compiles normally:
+There is a way around that, because **CSP is per-document and a cross-origin
+child does not inherit its parent's.** Only local-scheme children (`srcdoc`,
+`blob:`, `about:blank`) inherit one; a real `https://` child gets its policy
+from its own response headers. So Flutter can instead run in a nested frame
+served from our own Worker origin, talking to the shell over postMessage.
+
+Both routes are contingent on the host: one needs `wasm-unsafe-eval` in
+`script-src`, the other needs the host to honour `frameDomains` in `frame-src`.
+Neither is guaranteed, and choosing at build time means guessing. **So the shell
+asks.** It compiles the 8-byte empty module — magic plus version, a synchronous
+throw when CSP refuses — and mounts accordingly:
 
 ```
-host frame  (ui://showtime/booking.html — CSP from the host, no wasm)
-│  the MCP Apps App class, inlined; no script-src origins needed
-└── iframe  (https://…/app/ — our origin, our headers, wasm fine)
-       Flutter + CanvasKit; talks to the shell over postMessage
+ui://showtime/booking.html          the MCP Apps App class, inlined;
+│                                   no script-src origins needed to boot
+├─ wasm compiles here? ─yes─>  <script src=…/app/flutter_bootstrap.js>
+│                              Flutter in this document. One frame.
+└──────────────────────  no─>  <iframe src=…/app/>
+                               our origin, our headers, wasm fine
 ```
 
-The server declares exactly one origin — `_meta.ui.csp.frameDomains` — so the
-host's `frame-src` permits that child and nothing else. This is the same layered
-shape Claude's connector docs describe.
+The two paths present the same `showtimeBridge` surface to the Dart side; they
+differ only in whether the calls cross a postMessage boundary. The server
+declares one origin — ours — for every directive either path needs:
+`resourceDomains` for the loader, `baseUriDomains` for the `<base>` it resolves
+against, `connectDomains` for CanvasKit and the asset bundle, `frameDomains` for
+the fallback.
 
-Sandbox flags *do* inherit, so the inner frame runs `allow-scripts` **without**
-`allow-same-origin` — an opaque origin. Three consequences, all handled:
+If neither has painted after 15s, the shell replaces itself with the environment
+report — what was refused, and the offending policy straight out of
+`securitypolicyviolation.originalPolicy` — and posts it into the conversation as
+a `ui/message`. A blank panel is the one outcome worth engineering away, because
+it says nothing about why.
 
-- Its own fetches for `canvaskit.wasm` and the fonts go out as `Origin: null`,
-  so those assets need `Access-Control-Allow-Origin: *` and
+The nested path also has to survive sandbox flags, which *do* inherit: it runs
+`allow-scripts` **without** `allow-same-origin`, so it is an opaque origin.
+Three consequences, all handled:
+
+- Its fetches for `canvaskit.wasm` and the fonts go out as `Origin: null`, so
+  those assets need `Access-Control-Allow-Origin: *` and
   `Cross-Origin-Resource-Policy: cross-origin`.
-- The host frame sets `Cross-Origin-Embedder-Policy: require-corp`, and under
-  that a nested **cross-origin frame must send COEP itself** — CORP covers
-  subresources, not documents. Without it the browser refuses the frame with
+- If the host frame sets `Cross-Origin-Embedder-Policy: require-corp`, a nested
+  **cross-origin frame must send COEP itself** — CORP covers subresources, not
+  documents. Without it the browser refuses the frame with
   `ERR_BLOCKED_BY_RESPONSE`, which shows up as *"This content is blocked."*
-
 - `history.replaceState` throws `SecurityError` in an opaque origin and Flutter's
   default URL strategy calls it on boot, so `main()` does `setUrlStrategy(null)`.
 
 Both headers come from `server/public/_headers`, not from the Worker: Cloudflare
 serves a matched asset *before* the Worker runs, so Worker code never sees those
-requests. The dev server mirrors the same headers deliberately — when it was
-more permissive than production, both of these bugs stayed invisible until the
-thing was live inside a real host.
-
-If `wasm-unsafe-eval` ever lands, the shell collapses to a single frame and
-nothing else changes.
+requests. The dev server mirrors those headers, and the dev host builds and
+enforces the view CSP from the server's own declaration instead of running the
+view unpoliced — `/devhost/?wasm=off` drops `wasm-unsafe-eval` to exercise the
+fallback. Every bug in this section stayed invisible for as long as the local
+harness was more permissive than production.
 
 ## Run it locally
 
@@ -193,13 +208,14 @@ Worker is up — the standalone build runs on local fixtures.
 │   │   ├── booking_controller.dart  all state; the personas are presentation
 │   │   ├── theme.dart          personas, palettes, host-theme adoption
 │   │   └── ui/                 seat_map + ios_shell / android_shell / desktop_shell
-│   └── web/index.html      the inner frame + the view half of the relay
+│   └── web/index.html      the nested-frame document + its half of the relay
 ├── server/
-│   ├── src/mcp.mjs         the MCP server: 4 tools, 1 ui:// resource
+│   ├── src/mcp.mjs         the MCP server: 5 tools, 1 ui:// resource
 │   ├── src/domain.mjs      the box office (authoritative)
 │   ├── src/worker.mjs      Cloudflare entry: /mcp + static assets
 │   ├── src/dev-server.mjs  the same routes on plain Node
-│   ├── view/bridge.ts      the outer half of the relay
+│   ├── view/bridge.ts      the shell: protocol, both mounts, the choice
+│   ├── view/probe.ts       the environment report, when neither mount paints
 │   └── devhost/            a real MCP Apps host for development
 └── plugin/                 the Claude Code plugin + book-a-show skill
 ```
@@ -207,7 +223,7 @@ Worker is up — the standalone build runs on local fixtures.
 ## Tests
 
 ```bash
-cd server && npm test      # 22 protocol + domain tests
+cd server && npm test      # 28 protocol + domain tests
 cd app    && flutter test  # 19 widget, controller and parity tests
 ```
 

@@ -68,17 +68,29 @@ test("every tool points at the view, in both the current and legacy meta keys", 
   assert.deepEqual(confirm._meta.ui.visibility, ["app"]);
 });
 
-test("the resource is served as an MCP app and declares the frame origin", async () => {
+test("the resource is served as an MCP app and knows where to reach us", async () => {
   const { contents } = (await call(rpc("resources/read", { uri: VIEW_URI }))).result;
   const [content] = contents;
 
   assert.equal(content.mimeType, "text/html;profile=mcp-app");
   assert.deepEqual(content._meta.ui.csp.frameDomains, [ORIGIN]);
 
-  // The shell must be self-contained: the app URL and the inlined relay.
-  assert.match(content.text, /<iframe/);
-  assert.ok(content.text.includes(`${ORIGIN}/app/`));
+  // The shell must be self-contained: our origin, and the relay inlined so the
+  // resource needs no `script-src` origins in order to boot at all.
+  assert.ok(content.text.includes(ORIGIN));
   assert.ok(!/<script[^>]+src=/.test(content.text), "no external scripts");
+});
+
+test("the shell carries both mounts and chooses at runtime", async () => {
+  // Which mount works is a property of the host, not of us: a view CSP is not
+  // guaranteed to carry `wasm-unsafe-eval`, and a host is not guaranteed to
+  // honour `frameDomains`. Shipping only one mount means guessing which.
+  const { contents } = (await call(rpc("resources/read", { uri: VIEW_URI }))).result;
+  const html = contents[0].text;
+
+  assert.match(html, /WebAssembly\.Module/, "it tests wasm before choosing");
+  assert.match(html, /flutter_bootstrap\.js/, "the in-document mount is present");
+  assert.match(html, /"iframe"/, "the nested-frame mount is present");
 });
 
 test("reading an unknown resource is an error, not a 200 with junk", async () => {
@@ -258,12 +270,15 @@ test("the server registers exactly one ui:// resource", async () => {
   assert.deepEqual(resources.map((r) => r.uri), [VIEW_URI]);
 });
 
-test("the view can reach our origin for the checks it runs", async () => {
+test("the view declares every directive either mount needs", async () => {
   const { contents } = (await call(rpc("resources/read", { uri: VIEW_URI }))).result;
   const csp = contents[0]._meta.ui.csp;
-  assert.deepEqual(csp.frameDomains, [ORIGIN]);
-  assert.deepEqual(csp.connectDomains, [ORIGIN]);
+  // script-src for the loader, base-uri for the <base> it resolves against,
+  // connect-src for canvaskit and the asset bundle, frame-src for the fallback.
   assert.deepEqual(csp.resourceDomains, [ORIGIN]);
+  assert.deepEqual(csp.baseUriDomains, [ORIGIN]);
+  assert.deepEqual(csp.connectDomains, [ORIGIN]);
+  assert.deepEqual(csp.frameDomains, [ORIGIN]);
 });
 
 test("the diagnostics probe is bundled into the shell", async () => {

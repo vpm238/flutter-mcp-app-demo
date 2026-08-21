@@ -67,6 +67,41 @@ function hostContext() {
   };
 }
 
+/**
+ * Build the view's policy from what the server declared, the way SEP-1865
+ * describes it.
+ *
+ * `?wasm=off` drops `wasm-unsafe-eval`, which is the interesting switch: it is
+ * the one capability that decides whether the shell can run Flutter in the view
+ * document or has to nest a frame, and no host is obliged to grant it
+ * (ext-apps#605). Both branches need to work, so both need to be reachable here.
+ */
+function buildCsp(csp: Record<string, string[]>): string {
+  const list = (key: string) => (csp[key] ?? []).join(" ");
+  const wasm = new URLSearchParams(location.search).get("wasm") !== "off";
+
+  return [
+    `default-src 'none'`,
+    `script-src 'self' 'unsafe-inline'${wasm ? " 'wasm-unsafe-eval'" : ""} ${list("resourceDomains")}`,
+    `style-src 'self' 'unsafe-inline' ${list("resourceDomains")}`,
+    `img-src 'self' data: blob: ${list("resourceDomains")}`,
+    `font-src 'self' data: ${list("resourceDomains")}`,
+    `media-src 'self' data: blob: ${list("resourceDomains")}`,
+    `connect-src 'self' ${list("connectDomains")}`,
+    `frame-src ${list("frameDomains") || "'none'"}`,
+    `base-uri ${list("baseUriDomains") || "'none'"}`,
+    `form-action 'none'`,
+  ]
+    .map((d) => d.replace(/\s+/g, " ").trim())
+    .join("; ");
+}
+
+/** A srcdoc frame has no response headers, so the policy goes in a meta tag. */
+function withCsp(html: string, policy: string): string {
+  const tag = `<meta http-equiv="Content-Security-Policy" content="${policy.replace(/"/g, "&quot;")}">`;
+  return html.includes("<head>") ? html.replace("<head>", `<head>\n${tag}`) : tag + html;
+}
+
 async function boot() {
   transcript.replaceChildren();
   frameHolder.replaceChildren();
@@ -102,10 +137,16 @@ async function boot() {
   log("tools/call", `${toolName} ${JSON.stringify(args)}`);
 
   const resource = await client.readResource({ uri: VIEW_URI });
-  const html = String(resource.contents[0]?.text ?? "");
   const meta = (resource.contents[0]?._meta as { ui?: { csp?: Record<string, string[]> } })
     ?.ui;
-  log("resources/read", `${VIEW_URI} · frame-src ${meta?.csp?.frameDomains?.join(" ") ?? "none"}`);
+  const policy = buildCsp(meta?.csp ?? {});
+  log("resources/read", `${VIEW_URI} · CSP ${policy}`);
+
+  // Enforce the policy, rather than trusting that the view would survive one.
+  // A dev host looser than production is a dev host that hides exactly the bugs
+  // you only find in production — which is how the missing CORS and COEP
+  // headers stayed invisible until this was live inside a real host.
+  const html = withCsp(String(resource.contents[0]?.text ?? ""), policy);
 
   // Same restrictions a real host applies: scripts, no same-origin.
   iframe = document.createElement("iframe");

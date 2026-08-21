@@ -271,18 +271,26 @@ export async function handleRpc(message, { origin }) {
 /**
  * What the host needs in order to build a CSP the view can actually live under.
  *
- * The Flutter app runs in a nested frame served from `origin`, so `frame-src`
- * has to allow it. Everything else the outer shell needs is inline, which the
- * spec's default policy already permits.
+ * The shell mounts Flutter one of two ways depending on what the host permits,
+ * so it declares one origin — ours — for every directive either mount needs:
+ *
+ *   resourceDomains  `script-src` for the Flutter loader, plus its fonts and
+ *                    images, when the app runs in the view document itself.
+ *   baseUriDomains   that mount sets a `<base>` so the loader resolves
+ *                    `main.dart.js` and `canvaskit/` against us, not the host.
+ *   connectDomains   CanvasKit and the asset bundle are fetched, not linked.
+ *   frameDomains     `frame-src` for the fallback mount's nested frame.
+ *
+ * Declaring all four costs nothing — it is the same single origin — and means
+ * whichever mount the host allows has what it needs.
  */
 function viewMeta(origin) {
   return {
     csp: {
-      frameDomains: [origin],
-      // The diagnostics panel renders in this same resource and probes the
-      // origin directly, so it needs both of these to test anything real.
-      connectDomains: [origin],
       resourceDomains: [origin],
+      baseUriDomains: [origin],
+      connectDomains: [origin],
+      frameDomains: [origin],
     },
     prefersBorder: false,
   };

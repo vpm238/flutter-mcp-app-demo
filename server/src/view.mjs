@@ -1,17 +1,21 @@
 /**
  * The `ui://` resource: a shell that owns the MCP Apps connection and mounts
- * the Flutter build in a nested frame.
+ * the Flutter build — in this document where the host's CSP allows WebAssembly,
+ * in a nested frame on our own origin where it does not.
  *
- * It is deliberately tiny and fully self-contained — the relay is inlined, so
- * the resource needs no `script-src` origins. The only origin it declares is
- * `frame-src`, for the inner app (see `viewMeta` in `mcp.mjs`).
+ * The shell decides that at runtime (see `view/bridge.ts`), so the markup here
+ * carries neither an `<iframe>` nor a `<base>`: whichever mount wins creates
+ * what it needs. What the document does carry is the origin to reach us at, and
+ * a placeholder, so there is never an empty panel.
+ *
+ * The bridge is inlined rather than fetched, so the resource itself needs no
+ * `script-src` origins at all; the origins it does need are declared in
+ * `viewMeta` in `mcp.mjs`.
  */
 
 import { VIEW_BRIDGE_JS } from "./generated/view-bridge.mjs";
 
 export function renderViewHtml({ origin }) {
-  const appUrl = `${origin}/app/`;
-
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -31,13 +35,7 @@ export function renderViewHtml({ origin }) {
 </head>
 <body>
 <div id="status">Opening the box office…</div>
-<iframe
-  id="app"
-  title="Showtime seat picker"
-  allow="clipboard-write; fullscreen"
-  referrerpolicy="no-referrer"
-></iframe>
-<script>window.__SHOWTIME_APP_URL = ${jsString(appUrl)};</script>
+<script>window.__SHOWTIME_ORIGIN = ${jsString(origin)};</script>
 <script>${inlineScript(VIEW_BRIDGE_JS)}</script>
 </body>
 </html>`;
