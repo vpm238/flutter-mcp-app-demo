@@ -28,11 +28,10 @@ devices on the desk.
 
 ## What it demonstrates
 
-It is the portability claim from
-[llm-module-runtime](https://github.com/vpm238/llm-module-runtime) in a form you
-can click: a module targets a *catalog*, never a platform, and the host decides
-how it looks. Here the "catalog" is the MCP Apps extension ([SEP-1865]) and the
-hosts are Claude, ChatGPT, VS Code and Goose.
+That an interactive view can target a *protocol* rather than a platform and
+still feel native on each one. The protocol is the MCP Apps extension
+([SEP-1865]), which Claude, ChatGPT, VS Code and Goose all render; the platform
+feel is Flutter's, decided at runtime from whatever browser it lands in.
 
 Concretely:
 
