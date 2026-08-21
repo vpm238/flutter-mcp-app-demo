@@ -271,3 +271,34 @@ test("the diagnostics probe is bundled into the shell", async () => {
   assert.match(contents[0].text, /securitypolicyviolation/);
   assert.match(contents[0].text, /view-environment/);
 });
+
+test("diagnose_view reports whether the host advertised MCP Apps", async () => {
+  // A host that does not advertise `io.modelcontextprotocol/ui` will never
+  // render a ui:// view, no matter how correct the server is. That fact is
+  // invisible unless the server reports it back in text.
+  await call(
+    rpc("initialize", {
+      protocolVersion: "2025-06-18",
+      clientInfo: { name: "probe-client", version: "9.9" },
+      capabilities: { extensions: {} },
+    }),
+  );
+  let out = await call(rpc("tools/call", { name: "diagnose_view", arguments: {} }));
+  assert.match(out.result.content[0].text, /NOT ADVERTISED/);
+  assert.match(out.result.content[0].text, /probe-client/);
+
+  await call(
+    rpc("initialize", {
+      protocolVersion: "2025-06-18",
+      clientInfo: { name: "ui-client", version: "1.0" },
+      capabilities: {
+        extensions: {
+          "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app"] },
+        },
+      },
+    }),
+  );
+  out = await call(rpc("tools/call", { name: "diagnose_view", arguments: {} }));
+  assert.match(out.result.content[0].text, /ADVERTISED/);
+  assert.doesNotMatch(out.result.content[0].text, /NOT ADVERTISED/);
+});

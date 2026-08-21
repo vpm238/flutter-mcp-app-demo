@@ -57,6 +57,40 @@ const INSTRUCTIONS = [
  *  a demo box office — a real one would put these in KV or Durable Objects. */
 const bookings = new Map();
 
+/** The MCP Apps extension id a host advertises when it can render `ui://` views. */
+const UI_EXTENSION = "io.modelcontextprotocol/ui";
+
+/**
+ * What the last client sent at `initialize`.
+ *
+ * The spec puts the burden on the server to "check client capabilities before
+ * registering UI-enabled tools", so whether a host advertises
+ * `io.modelcontextprotocol/ui` is the single fact that decides if a view will
+ * ever render. It is also invisible from the outside — hence recording it.
+ */
+let lastInitialize = null;
+
+export function getLastInitialize() {
+  return lastInitialize;
+}
+
+function describeClient(init) {
+  if (!init) {
+    return "No initialize has been seen by this instance yet.";
+  }
+  const ui = init.capabilities?.extensions?.[UI_EXTENSION];
+  const lines = [
+    `client: ${init.clientInfo?.name ?? "?"} ${init.clientInfo?.version ?? ""}`.trim(),
+    `protocolVersion: ${init.protocolVersion ?? "?"}`,
+    ui
+      ? `MCP Apps: ADVERTISED — mimeTypes ${JSON.stringify(ui.mimeTypes ?? [])}`
+      : "MCP Apps: NOT ADVERTISED — this client did not offer " +
+        `\`${UI_EXTENSION}\`, so it will not render a ui:// view`,
+    `raw capabilities: ${JSON.stringify(init.capabilities ?? {})}`,
+  ];
+  return lines.join("\n");
+}
+
 const TOOLS = [
   {
     name: "book_show_seats",
@@ -165,6 +199,12 @@ export async function handleRpc(message, { origin }) {
   try {
     switch (method) {
       case "initialize":
+        lastInitialize = {
+          at: new Date().toISOString(),
+          clientInfo: params.clientInfo,
+          protocolVersion: params.protocolVersion,
+          capabilities: params.capabilities,
+        };
         return ok(id, {
           protocolVersion: SUPPORTED_PROTOCOLS.includes(params.protocolVersion)
             ? params.protocolVersion
@@ -258,19 +298,25 @@ async function callTool(name, args) {
       return seatMapResult(args);
     case "confirm_booking":
       return confirmResult(args);
-    case "diagnose_view":
+    case "diagnose_view": {
+      const client = describeClient(lastInitialize);
       return {
         content: [
           {
             type: "text",
             text:
-              "Rendering the view diagnostics panel. It reports whether this " +
-              "host allows WebAssembly, nested frames, and requests to the " +
-              "server's origin, and prints the CSP if one blocks something.",
+              "Showtime connection report — what this host told the server at " +
+              "initialize:\n\n" +
+              client +
+              "\n\nIf MCP Apps is NOT ADVERTISED, no ui:// view can render " +
+              "here regardless of what the server sends, and the interactive " +
+              "picker is unavailable on this surface. If it IS advertised, a " +
+              "panel should appear with the in-frame checks.",
           },
         ],
         structuredContent: { probe: "view-environment" },
       };
+    }
     default:
       return toolError(`Unknown tool: ${name}`);
   }

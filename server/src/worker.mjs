@@ -11,7 +11,7 @@
  */
 
 import { renderDiagnoseHtml } from "./diagnose.mjs";
-import { handleRpc, SERVER_INFO } from "./mcp.mjs";
+import { getLastInitialize, handleRpc, SERVER_INFO } from "./mcp.mjs";
 
 const CORS = {
   "access-control-allow-origin": "*",
@@ -41,6 +41,10 @@ export default {
       return new Response(renderDiagnoseHtml({ origin: url.origin }), {
         headers: { "content-type": "text/html; charset=utf-8", ...CORS },
       });
+    }
+
+    if (url.pathname === "/debug/last-initialize") {
+      return json({ lastInitialize: getLastInitialize() });
     }
 
     if (url.pathname === "/health") {
