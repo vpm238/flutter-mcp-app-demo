@@ -23,7 +23,14 @@ export function renderViewHtml({ origin }) {
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Showtime</title>
 <style>
-  html, body { margin: 0; padding: 0; height: 100%; background: transparent; }
+  /* When Flutter mounts in this document, this *is* the app's page — so it
+     needs what app/web/index.html sets for the nested case. */
+  html, body {
+    margin: 0; padding: 0; height: 100%; background: transparent;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
   #app { display: block; width: 100%; height: 100%; border: 0; }
   #status {
     position: absolute; inset: 0; display: grid; place-items: center;
