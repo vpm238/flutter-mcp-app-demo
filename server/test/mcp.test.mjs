@@ -5,7 +5,10 @@
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { handleRpc, VIEW_URI } from "../src/mcp.mjs";
 import {
@@ -220,4 +223,19 @@ test("Mondays are dark and the schedule is a sensible length", () => {
   for (const slot of slots) {
     assert.notEqual(new Date(slot.startsAt).getDay(), 1, slot.id);
   }
+});
+
+test("static assets carry the headers the sandboxed frame needs", () => {
+  // Cloudflare serves matched assets before the Worker runs, so the Worker's
+  // header wrapping never applies to them — `public/_headers` is the only
+  // thing that does. Nothing local catches this: the dev server sets these
+  // headers itself, so a missing file here only shows up in production as a
+  // blank frame.
+  const here = dirname(fileURLToPath(import.meta.url));
+  const headers = readFileSync(join(here, "../public/_headers"), "utf8");
+
+  const rule = headers.split(/^(?=\/)/m).find((block) => block.startsWith("/app/*"));
+  assert.ok(rule, "no /app/* rule in public/_headers");
+  assert.match(rule, /Access-Control-Allow-Origin:\s*\*/i);
+  assert.match(rule, /Cross-Origin-Resource-Policy:\s*cross-origin/i);
 });

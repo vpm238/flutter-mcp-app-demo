@@ -75,9 +75,15 @@ async function boot() {
     { name: "showtime-devhost", version: "1.0.0" },
     { capabilities: {} },
   );
-  const transport = new StreamableHTTPClientTransport(new URL("/mcp", location.origin));
+  // `?mcp=https://…/mcp` points the host at a deployed Worker instead of the
+  // local one — the way to check a real deployment end to end, since the
+  // Worker sets permissive CORS on /mcp.
+  const endpoint =
+    new URLSearchParams(location.search).get("mcp") ??
+    new URL("/mcp", location.origin).toString();
+  const transport = new StreamableHTTPClientTransport(new URL(endpoint));
   await client.connect(transport);
-  log("host", `connected to ${client.getServerVersion()?.name ?? "server"}`);
+  log("host", `connected to ${client.getServerVersion()?.name ?? "server"} at ${endpoint}`);
 
   const tools = await client.listTools();
   log("tools/list", tools.tools.map((t) => t.name).join(", "));

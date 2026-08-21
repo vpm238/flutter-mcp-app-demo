@@ -1,0 +1,13 @@
+# Cloudflare Workers static assets are served *before* the Worker runs when a
+# path matches a file, so the Worker's own header wrapping never executes for
+# these. This file is the only thing that sets headers on them.
+#
+# Why they matter: the view runs in a frame sandboxed without
+# `allow-same-origin`, so its document has an opaque origin and its own
+# subresource fetches — CanvasKit, the fonts — arrive as cross-origin requests
+# with `Origin: null`. Without these, Flutter never gets a renderer and the
+# frame stays blank.
+
+/app/*
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin

@@ -85,8 +85,12 @@ Sandbox flags *do* inherit, so the inner frame runs `allow-scripts` **without**
 `allow-same-origin` — an opaque origin. Two consequences, both handled:
 
 - Its own fetches for `canvaskit.wasm` and the fonts go out as `Origin: null`,
-  so the Worker sets `Access-Control-Allow-Origin: *` and
-  `Cross-Origin-Resource-Policy: cross-origin` on assets.
+  so those assets need `Access-Control-Allow-Origin: *` and
+  `Cross-Origin-Resource-Policy: cross-origin`. They come from
+  `server/public/_headers`, not from the Worker: Cloudflare serves a matched
+  asset *before* the Worker runs, so Worker code never sees those requests.
+  Local dev sets the same headers itself, which is exactly why this one has to
+  be tested rather than eyeballed.
 - `history.replaceState` throws `SecurityError` in an opaque origin and Flutter's
   default URL strategy calls it on boot, so `main()` does `setUrlStrategy(null)`.
 
