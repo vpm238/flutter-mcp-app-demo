@@ -33,10 +33,15 @@
  * needs no `script-src` origins.
  */
 
-import { App, PostMessageTransport } from "@modelcontextprotocol/ext-apps";
-
 import { renderProbe } from "./probe.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { ViewApp } from "./protocol.js";
+
+/** The bits of a `CallToolResult` this shell reads. */
+type CallToolResult = {
+  content?: Array<{ type: string; text?: string }>;
+  structuredContent?: Record<string, unknown>;
+  isError?: boolean;
+};
 
 declare global {
   interface Window {
@@ -98,16 +103,12 @@ let chosenMount = "undecided";
 let deliverToolResult: (json: string) => void = () => {};
 let deliverHostContext: (json: string) => void = () => {};
 
-/** Build an `App` with our handlers already wired, ready to connect. */
-function makeApp(): App {
-  const app = new App(
-    { name: "showtime-view", version: "1.0.0" },
-    {},
-    // Flutter fills the frame and reports its own size, so the SDK's
-    // ResizeObserver would only ever measure our 100%-height shell.
-    { autoResize: false },
-  );
+/** Build a `ViewApp` with our handlers already wired, ready to connect. */
+function makeApp(): ViewApp {
+  const app = new ViewApp({ name: "showtime-view", version: "1.0.0" });
 
+  // One-shot: the host sends this once, immediately after the handshake, so the
+  // handler has to exist before we connect.
   app.ontoolresult = (result: CallToolResult) => {
     const data = extract(result);
 
@@ -149,7 +150,10 @@ function probeContext() {
 function postFindings(summary: string) {
   void connected.then((live) => {
     if (!live) return;
-    void app.sendMessage({ role: "user", content: [{ type: "text", text: summary }] });
+    void app.request("ui/message", {
+      role: "user",
+      content: [{ type: "text", text: summary }],
+    });
   });
 }
 
@@ -179,7 +183,7 @@ function snapshotContext(context: Record<string, unknown> | undefined) {
     displayMode: context?.displayMode ?? "inline",
     availableDisplayModes: context?.availableDisplayModes ?? ["inline"],
     maxHeight: dimensions?.maxHeight ?? dimensions?.height ?? null,
-    hostName: app.getHostVersion()?.name ?? null,
+    hostName: app.hostInfo?.name ?? null,
   };
 }
 
@@ -190,23 +194,15 @@ function snapshotContext(context: Record<string, unknown> | undefined) {
  * transport after we send it — which is a normal race, since hosts commonly
  * wire up on the frame's `load` event — the request is simply never heard and
  * the connection stalls until it times out. So try a few times with a short
- * deadline, each attempt on a fresh `App` because a `Protocol` cannot be
- * reconnected once its transport has failed.
+ * deadline, and drop anything still in flight between attempts.
  */
 async function connectWithRetry(attempts = 6, deadlineMs = 700): Promise<boolean> {
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
-      await app.connect(new PostMessageTransport(window.parent, window.parent), {
-        timeout: deadlineMs,
-      });
+      await app.connect(deadlineMs);
       return true;
     } catch {
-      try {
-        await app.close();
-      } catch {
-        /* the transport may already be gone */
-      }
-      app = makeApp();
+      app.reset();
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
   }
@@ -219,7 +215,11 @@ const connected = connectWithRetry().then((live) => {
     console.warn("[showtime] no MCP host answered; running on local fixtures");
     return false;
   }
-  void app.sendLog({ level: "info", data: "Showtime view connected", logger: "showtime" });
+  app.notify("notifications/message", {
+    level: "info",
+    data: "Showtime view connected",
+    logger: "showtime",
+  });
   return true;
 });
 
@@ -238,16 +238,16 @@ const api = {
       ),
     ]);
     return JSON.stringify({
-      context: snapshotContext(app.getHostContext()),
+      context: snapshotContext(app.hostContext),
       toolResult: result ?? null,
     });
   },
 
   async callTool(name: string, argsJson: string): Promise<string> {
-    const result = await app.callServerTool({
+    const result = (await app.request("tools/call", {
       name,
       arguments: JSON.parse(argsJson || "{}"),
-    });
+    })) as CallToolResult;
     if (result.isError) {
       const text = result.content?.find((c) => c.type === "text");
       throw new Error(
@@ -258,30 +258,35 @@ const api = {
   },
 
   async requestDisplayMode(mode: string): Promise<string> {
-    const result = await app.requestDisplayMode({
-      mode: mode as "inline" | "fullscreen" | "pip",
-    });
-    return JSON.stringify({ mode: result.mode });
+    const result = (await app.request("ui/request-display-mode", { mode })) as {
+      mode?: string;
+    };
+    return JSON.stringify({ mode: result?.mode ?? mode });
   },
 
   sendMessage(text: string) {
-    void app.sendMessage({ role: "user", content: [{ type: "text", text }] });
+    void app.request("ui/message", {
+      role: "user",
+      content: [{ type: "text", text }],
+    });
   },
 
   updateModelContext(text: string) {
-    void app.updateModelContext({ content: [{ type: "text", text }] });
+    void app.request("ui/update-model-context", {
+      content: [{ type: "text", text }],
+    });
   },
 
   setSize(width: number, height: number) {
-    void app.sendSizeChanged({
+    app.notify("ui/notifications/size-changed", {
       width: Number(width) || undefined,
       height: Number(height) || undefined,
     });
   },
 
   log(level: string, message: string) {
-    void app.sendLog({
-      level: (level as "info" | "warning" | "error") ?? "info",
+    app.notify("notifications/message", {
+      level: level || "info",
       data: String(message),
       logger: "showtime",
     });

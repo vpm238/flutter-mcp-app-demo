@@ -322,3 +322,13 @@ test("diagnose_view reports whether the host advertised MCP Apps", async () => {
   ]);
   assert.match(out.result.content[0].text, /MCP Apps: ADVERTISED/);
 });
+
+test("the ui:// resource stays small enough to hand a host", async () => {
+  // The shell inlines its script so the resource needs no script-src origins,
+  // which makes its size a property of the protocol implementation. Built on
+  // the SDK's App class this was 393 kB, ~99% of it zod — an unreasonable
+  // thing to ask a host to render, and a plausible refusal all by itself.
+  const { contents } = (await call(rpc("resources/read", { uri: VIEW_URI }))).result;
+  const kb = contents[0].text.length / 1024;
+  assert.ok(kb < 40, `the view resource is ${kb.toFixed(0)} kB; it should stay well under 40`);
+});

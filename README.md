@@ -90,7 +90,16 @@ declares one origin — ours — for every directive either path needs:
 against, `connectDomains` for CanvasKit and the asset bundle, `frameDomains` for
 the fallback.
 
-If neither has painted after 15s, the shell replaces itself with the environment
+The shell inlines its own script so the resource needs no `script-src` origins
+to boot — which makes its size a design constraint rather than a detail. Built
+on the SDK's `App` class it came to **393 kB of inline HTML**, ~99% of it zod
+validating a protocol the view uses maybe eight methods of. `view/protocol.ts`
+is that protocol written out as plain JSON-RPC over `postMessage`, and the
+resource is now **10 kB**. The dev host still drives the view with the official
+`AppBridge`, so the handshake is checked against the reference implementation on
+every run.
+
+If neither mount has painted after 12s, the shell replaces itself with the environment
 report — what was refused, and the offending policy straight out of
 `securitypolicyviolation.originalPolicy` — and posts it into the conversation as
 a `ui/message`. A blank panel is the one outcome worth engineering away, because
@@ -214,7 +223,8 @@ Worker is up — the standalone build runs on local fixtures.
 │   ├── src/domain.mjs      the box office (authoritative)
 │   ├── src/worker.mjs      Cloudflare entry: /mcp + static assets
 │   ├── src/dev-server.mjs  the same routes on plain Node
-│   ├── view/bridge.ts      the shell: protocol, both mounts, the choice
+│   ├── view/bridge.ts      the shell: both mounts, and the choice between them
+│   ├── view/protocol.ts    the MCP Apps view protocol, hand-rolled
 │   ├── view/probe.ts       the environment report, when neither mount paints
 │   └── devhost/            a real MCP Apps host for development
 └── plugin/                 the Claude Code plugin + book-a-show skill
