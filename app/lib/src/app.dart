@@ -15,6 +15,7 @@ import 'ui/android_shell.dart';
 import 'ui/common.dart';
 import 'ui/desktop_shell.dart';
 import 'ui/ios_shell.dart';
+import 'ui/stub_card.dart';
 
 class ShowtimeApp extends StatefulWidget {
   const ShowtimeApp({
@@ -97,7 +98,7 @@ class _ShowtimeAppState extends State<ShowtimeApp> {
     final width = MediaQuery.maybeSizeOf(context)?.width ?? 900;
     final wanted = switch (_layout) {
       Fit.roomy => 660.0,
-      Fit.compact => 780.0,
+      Fit.compact || Fit.stub => 780.0,
     };
     final cap = _hostContext.maxHeight;
     widget.host.setSize(width, cap == null ? wanted : math.min(wanted, cap));
@@ -198,6 +199,20 @@ class _ShowtimeAppState extends State<ShowtimeApp> {
         Persona.android => AndroidConfirmation(controller: _controller),
         Persona.desktop => DesktopConfirmation(controller: _controller),
       };
+    }
+
+    // A panel too small to hold the app gets one thing to press instead.
+    //
+    // Claude on Android gives an inline view a 411x100 frame and ignores size
+    // requests, so the app cannot grow itself out of it. Rendering the real UI
+    // there puts every control off-screen: the panel looks broken and taps
+    // land on nothing, which is exactly what it did.
+    if (_layout == Fit.stub && widget.host.isHosted) {
+      return StubCard(
+        controller: _controller,
+        canExpand: _hostContext.canGoFullscreen,
+        onExpand: _goFullscreen,
+      );
     }
 
     // The persona switcher is a demo affordance, and on a phone-sized panel it

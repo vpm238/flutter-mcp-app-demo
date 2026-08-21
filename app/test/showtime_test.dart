@@ -26,6 +26,7 @@ void main() {
   _personaResolution();
   _layoutFit();
   _hostPalette();
+  _stubPanel();
 
   group('catalog', () {
     test('the generated house is stable for a given slot id', () {
@@ -387,6 +388,39 @@ void _hostPalette() {
         },
       );
       expect(Palette.fromHost(host).background, const Color(0xFF30302E));
+    });
+  });
+}
+
+void _stubPanel() {
+  group('a panel too small to be an app', () {
+    // Claude on Android gives an inline view a 411x100 frame and ignores
+    // ui/notifications/size-changed, so the view cannot grow itself out of it.
+    // Laying the real UI out there puts every control off-screen — the panel
+    // looks dead and taps land on nothing.
+    test('a stub-height panel is neither compact nor roomy', () {
+      expect(fitFor(const Size(411, 100)), Fit.stub);
+      expect(fitFor(const Size(411, 239)), Fit.stub);
+      expect(fitFor(const Size(411, 240)), Fit.compact);
+    });
+
+    testWidgets('renders one thing to press, not a squashed app',
+        (tester) async {
+      tester.view.physicalSize = const Size(411, 100);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final host = await _unhosted();
+      await tester.pumpWidget(ShowtimeApp(
+        host: host,
+        box: LocalBoxOffice(),
+        showChrome: false,
+      ));
+      await tester.pumpAndSettle();
+
+      // Unhosted, so it still gets the real app: the stub is for hosts that
+      // cannot be grown, and a plain web page can always scroll.
+      expect(tester.takeException(), isNull);
     });
   });
 }

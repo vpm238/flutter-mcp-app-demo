@@ -273,7 +273,21 @@ async function boot() {
     return { mode: granted };
   };
 
+  // `?autosize=ignore` models Claude on Android: the inline frame is a fixed
+  // stub — 411x100 — and `ui/notifications/size-changed` does nothing. The view
+  // cannot grow itself, and a view that assumes it can lays its whole UI out in
+  // a strip where nothing is where it appears and taps land on nothing.
+  const ignoresSize =
+    new URLSearchParams(location.search).get("autosize") === "ignore";
+  if (ignoresSize) {
+    log("host", "autosize=ignore — size-changed does nothing, as on Claude Android");
+  }
+
   bridge.addEventListener("sizechange", ({ width, height }) => {
+    if (ignoresSize) {
+      log("size", `asked ${Math.round(width ?? 0)}×${Math.round(height ?? 0)} · IGNORED`);
+      return;
+    }
     // Grant what was asked for, up to the panel. A host is not obliged to
     // honour a size request at all, and none of them grow without limit.
     const cap = panel().height;

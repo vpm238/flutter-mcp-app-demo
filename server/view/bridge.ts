@@ -571,7 +571,34 @@ if (direct) mountDirect();
 else mountNested();
 
 api.log("info", `Showtime mounting ${chosenMount}`);
-beacon("mount-chosen", chosenMount);
+beacon("mount-chosen", `${chosenMount} viewport=${window.innerWidth}x${window.innerHeight}`);
+
+/**
+ * Ask for a usable height immediately, and keep checking whether we got one.
+ *
+ * Claude on Android starts this frame at 411x100 and does not appear to act on
+ * `ui/notifications/size-changed`. Flutter lays out against `window.innerHeight`,
+ * so in a 100px frame the entire app is crammed into a strip: nothing is where
+ * it appears and taps land on nothing.
+ *
+ * The CSS floor in `view.mjs` is the fix for a host that measures content. This
+ * is the fix for a host that listens — sent from the shell rather than waiting
+ * for Flutter, because Flutter is the thing being squashed. The follow-up
+ * beacons say which kind of host this is, which is not knowable any other way.
+ */
+void connected.then((live) => {
+  if (!live) return;
+  const want = Math.max(620, Math.round(window.innerHeight));
+  api.setSize(window.innerWidth, want);
+  beacon("size-asked", `want=${window.innerWidth}x${want} at=${window.innerWidth}x${window.innerHeight}`);
+
+  for (const delay of [1500, 5000]) {
+    setTimeout(
+      () => beacon("size-now", `${window.innerWidth}x${window.innerHeight}`),
+      delay,
+    );
+  }
+});
 
 /**
  * A blank panel is the worst outcome, because it says nothing about why. If

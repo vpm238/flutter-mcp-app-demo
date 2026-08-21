@@ -36,8 +36,17 @@ export function renderViewHtml({ origin }) {
     overscroll-behavior: contain;
     -webkit-tap-highlight-color: transparent;
   }
+  /* A real height in pixels, not a percentage.
+     Claude on Android hands this document a 100px frame and does not act on
+     ui/notifications/size-changed, which means it is sizing the frame from the
+     content. Our content had no intrinsic height to measure: html at 100% of a
+     100px frame is 100px, and body at 100% of that is 100px again — perfectly
+     circular, and the whole app ends up laid out in a 411x100 strip where
+     nothing is where it appears and taps land on nothing.
+     An absolute floor breaks the circle. Flutter reads window.innerHeight, so
+     it picks the new size up on its own once the frame grows. */
   html { height: 100%; }
-  body { min-height: 100%; }
+  body { min-height: 620px; }
 
   /* Flutter handles every gesture itself, including scrolling its own lists.
      Without this the browser may decide a vertical swipe belongs to an

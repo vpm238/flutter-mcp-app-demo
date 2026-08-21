@@ -108,6 +108,14 @@ Persona? _appleOrAndroid(String haystack) {
 /// grid, times column, a full house at full size — needs roughly 820x560
 /// before it stops being a scrollbar.
 enum Fit {
+  /// Not enough room to be an app at all — a stub card in a conversation.
+  ///
+  /// Claude on Android hands an inline view a 411x100 frame and does not act
+  /// on `ui/notifications/size-changed`, so the view cannot grow itself. Laying
+  /// the real UI out in that strip puts every control off-screen and makes the
+  /// panel look dead. The honest response is a single thing to press.
+  stub,
+
   /// A single column, with sheets for the big surfaces.
   compact,
 
@@ -115,15 +123,21 @@ enum Fit {
   roomy,
 }
 
+/// Below this a panel cannot hold a usable layout, only an invitation to open
+/// one. Two rows of Material text plus a touch target is already ~120px.
+const double kStubHeight = 240;
+
 /// The two-column layout's minimum. Below either figure it clips rather than
 /// reflows, because the seat map has a natural size and the rail beside it
 /// does not compress.
 const Size kRoomyMinimum = Size(820, 560);
 
-Fit fitFor(Size size) =>
-    size.width >= kRoomyMinimum.width && size.height >= kRoomyMinimum.height
-        ? Fit.roomy
-        : Fit.compact;
+Fit fitFor(Size size) {
+  if (size.height < kStubHeight) return Fit.stub;
+  return size.width >= kRoomyMinimum.width && size.height >= kRoomyMinimum.height
+      ? Fit.roomy
+      : Fit.compact;
+}
 
 /// Resolved colours for one persona + host theme combination.
 @immutable
@@ -306,7 +320,8 @@ class Skin extends InheritedWidget {
     return skin!;
   }
 
-  bool get isCompact => fit == Fit.compact;
+  bool get isCompact => fit != Fit.roomy;
+  bool get isStub => fit == Fit.stub;
 
   void note(String stage, String detail) => trace?.call(stage, detail);
 
