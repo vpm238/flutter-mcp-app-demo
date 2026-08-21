@@ -44,7 +44,7 @@ export default {
     }
 
     if (url.pathname === "/debug/last-initialize") {
-      return json({ lastInitialize: getLastInitialize() });
+      return json({ lastInitialize: await getLastInitialize() });
     }
 
     if (url.pathname === "/health") {

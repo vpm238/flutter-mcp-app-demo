@@ -26,6 +26,7 @@ import {
   seatMapFor,
   slotsFor,
 } from "./domain.mjs";
+import { recallHandshake, rememberHandshake } from "./handshake-store.mjs";
 import { renderViewHtml } from "./view.mjs";
 
 export const SERVER_INFO = {
@@ -68,10 +69,8 @@ const UI_EXTENSION = "io.modelcontextprotocol/ui";
  * `io.modelcontextprotocol/ui` is the single fact that decides if a view will
  * ever render. It is also invisible from the outside — hence recording it.
  */
-let lastInitialize = null;
-
 export function getLastInitialize() {
-  return lastInitialize;
+  return recallHandshake();
 }
 
 function describeClient(init) {
@@ -199,12 +198,12 @@ export async function handleRpc(message, { origin }) {
   try {
     switch (method) {
       case "initialize":
-        lastInitialize = {
+        await rememberHandshake({
           at: new Date().toISOString(),
           clientInfo: params.clientInfo,
           protocolVersion: params.protocolVersion,
           capabilities: params.capabilities,
-        };
+        });
         return ok(id, {
           protocolVersion: SUPPORTED_PROTOCOLS.includes(params.protocolVersion)
             ? params.protocolVersion
@@ -299,7 +298,7 @@ async function callTool(name, args) {
     case "confirm_booking":
       return confirmResult(args);
     case "diagnose_view": {
-      const init = lastInitialize;
+      const init = await recallHandshake();
       const ui = init?.capabilities?.extensions?.[UI_EXTENSION];
 
       // The findings go in structuredContent, not just text: hosts display the
