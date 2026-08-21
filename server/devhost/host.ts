@@ -23,7 +23,7 @@ const themeSelect = document.getElementById("theme") as HTMLSelectElement;
 const toolSelect = document.getElementById("tool-args") as HTMLSelectElement;
 const reloadButton = document.getElementById("reload") as HTMLButtonElement;
 
-const VIEW_URI = "ui://showtime/booking.html";
+const VIEW_URI = "ui://showtime/booking-v2.html";
 
 let bridge: AppBridge | null = null;
 let iframe: HTMLIFrameElement | null = null;
@@ -36,13 +36,36 @@ function log(kind: string, detail: string) {
   transcript.prepend(row);
 }
 
+/**
+ * The panel the host is willing to give us.
+ *
+ * A real chat client hands a view a slot in a conversation, not a page — often
+ * a few hundred pixels tall — and it does not grow just because the view asks.
+ * This dev host used to resize the frame to whatever `sizechange` requested,
+ * which flattered the layout and hid the only sizing bug that matters. `?panel`
+ * caps it: `?panel=inline` is a typical chat slot, `?panel=720x480` is explicit.
+ */
+function panel(): { width: number; height: number } {
+  const raw = new URLSearchParams(location.search).get("panel") ?? "roomy";
+  const preset: Record<string, [number, number]> = {
+    inline: [700, 420],
+    tall: [700, 620],
+    roomy: [900, 900],
+    phone: [390, 620],
+  };
+  const explicit = /^(\d+)x(\d+)$/.exec(raw);
+  if (explicit) return { width: +explicit[1], height: +explicit[2] };
+  const [width, height] = preset[raw] ?? preset.roomy;
+  return { width, height };
+}
+
 function hostContext() {
   const dark = themeSelect.value === "dark";
   return {
     theme: dark ? ("dark" as const) : ("light" as const),
     displayMode: "inline" as const,
     availableDisplayModes: ["inline" as const, "fullscreen" as const],
-    containerDimensions: { maxWidth: 900, maxHeight: 900 },
+    containerDimensions: { maxWidth: panel().width, maxHeight: panel().height },
     styles: {
       variables: dark
         ? {
@@ -179,8 +202,8 @@ async function boot() {
   // Same restrictions a real host applies: scripts, no same-origin.
   iframe = document.createElement("iframe");
   iframe.setAttribute("sandbox", "allow-scripts allow-forms");
-  iframe.style.width = "100%";
-  iframe.style.height = "760px";
+  iframe.style.width = `${panel().width}px`;
+  iframe.style.height = `${panel().height}px`;
   iframe.style.border = "0";
   frameHolder.appendChild(iframe);
 
@@ -208,8 +231,16 @@ async function boot() {
   };
 
   bridge.addEventListener("sizechange", ({ width, height }) => {
-    if (iframe && height) iframe.style.height = `${Math.round(height)}px`;
-    log("size", `${Math.round(width ?? 0)}×${Math.round(height ?? 0)}`);
+    // Grant what was asked for, up to the panel. A host is not obliged to
+    // honour a size request at all, and none of them grow without limit.
+    const cap = panel().height;
+    const granted = Math.min(Math.round(height ?? cap), cap);
+    if (iframe && height) iframe.style.height = `${granted}px`;
+    log(
+      "size",
+      `asked ${Math.round(width ?? 0)}×${Math.round(height ?? 0)} · granted ${granted}` +
+        (granted < Math.round(height ?? 0) ? " (capped by the panel)" : ""),
+    );
   });
 
   // `connect()` resolves once the transport is attached — it does NOT wait for

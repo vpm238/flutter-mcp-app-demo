@@ -24,6 +24,7 @@ Future<void> _pumpApp(WidgetTester tester, Persona persona) async {
 
 void main() {
   _personaResolution();
+  _layoutFit();
 
   group('catalog', () {
     test('the generated house is stable for a given slot id', () {
@@ -307,6 +308,43 @@ void _personaResolution() {
     test('no host information falls back to the old behaviour', () {
       expect(personaFor(null), detectPersona());
       expect(personaFor(host()), detectPersona());
+    });
+  });
+}
+
+void _layoutFit() {
+  group('layout follows the space, not the persona', () {
+    // A chat client hands this view a slot in a conversation, not a page. The
+    // two-column layout needs room the slot may not have, and asking for more
+    // height than the host offered produces a clipped panel, not a taller one.
+    test('a conversation-sized slot is compact', () {
+      expect(fitFor(const Size(700, 420)), Fit.compact);
+      expect(fitFor(const Size(700, 620)), Fit.compact, reason: 'too narrow');
+      expect(fitFor(const Size(900, 420)), Fit.compact, reason: 'too short');
+    });
+
+    test('a full panel is roomy', () {
+      expect(fitFor(const Size(900, 900)), Fit.roomy);
+      expect(fitFor(kRoomyMinimum), Fit.roomy, reason: 'the boundary counts');
+    });
+
+    testWidgets('a desktop persona in a small slot does not clip', (tester) async {
+      tester.view.physicalSize = const Size(700, 420);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final host = await _unhosted();
+      await tester.pumpWidget(ShowtimeApp(
+        host: host,
+        box: LocalBoxOffice(),
+        initialPersona: Persona.desktop,
+        showChrome: false,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // The two-column shell is what overflows here; the compact one is not.
+      expect(find.byType(DesktopShell), findsNothing);
     });
   });
 }

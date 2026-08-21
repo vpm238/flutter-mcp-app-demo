@@ -85,6 +85,32 @@ Persona? _appleOrAndroid(String haystack) {
   return null;
 }
 
+/// How much room the host actually gave us.
+///
+/// Persona and fit are different questions, and conflating them is what makes
+/// a view look wrong inside a chat client. Persona decides the *design
+/// language*; fit decides the *layout*. A desktop browser can hand this view a
+/// 700x420 slot in the middle of a conversation, and the two-column layout —
+/// month grid, times column, a full house at full size — needs roughly
+/// 820x560 before it stops being a scrollbar.
+enum Fit {
+  /// A single column that scrolls, with sheets for the big surfaces.
+  compact,
+
+  /// Room for the side-by-side layout.
+  roomy,
+}
+
+/// The two-column layout's minimum. Below either figure it clips rather than
+/// reflows, because the seat map has a natural size and the rail beside it
+/// does not compress.
+const Size kRoomyMinimum = Size(820, 560);
+
+Fit fitFor(Size size) =>
+    size.width >= kRoomyMinimum.width && size.height >= kRoomyMinimum.height
+        ? Fit.roomy
+        : Fit.compact;
+
 /// Resolved colours for one persona + host theme combination.
 @immutable
 class Palette {

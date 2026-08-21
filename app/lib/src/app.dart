@@ -3,6 +3,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -84,15 +85,30 @@ class _ShowtimeAppState extends State<ShowtimeApp> {
 
   Persona get _persona => _override ?? _detected;
 
-  /// Ask the host for a frame tall enough for this persona's layout.
+  /// Ask the host for a frame the layout actually fits in — and no more.
+  ///
+  /// A host is not obliged to grant a size request, and a chat client will not
+  /// grow a conversation slot without limit. Asking for 660 when the host has
+  /// already said it has 420 does not produce 660; it produces 420 with the
+  /// bottom sliced off. So ask for what this layout needs, then clamp to what
+  /// the host said it had.
   void _reportSize() {
     if (!widget.host.isHosted) return;
     final width = MediaQuery.maybeSizeOf(context)?.width ?? 900;
-    final height = switch (_persona) {
-      Persona.desktop => 660.0,
-      _ => 780.0,
+    final wanted = switch (_layout) {
+      Fit.roomy => 660.0,
+      Fit.compact => 780.0,
     };
-    widget.host.setSize(width, height);
+    final cap = _hostContext.maxHeight;
+    widget.host.setSize(width, cap == null ? wanted : math.min(wanted, cap));
+  }
+
+  /// What the host gave us, or the space we want if it has not said.
+  Fit get _layout {
+    final size = MediaQuery.maybeSizeOf(context);
+    if (size != null) return fitFor(size);
+    final cap = _hostContext.maxHeight;
+    return cap != null && cap < kRoomyMinimum.height ? Fit.compact : Fit.roomy;
   }
 
   void _setPersona(Persona? persona) {
@@ -145,10 +161,15 @@ class _ShowtimeAppState extends State<ShowtimeApp> {
 
     final header = widget.showChrome ? _chrome(context, persona) : null;
 
+    // The desktop *shell* is a layout, not a design language. In a slot too
+    // small for it, a desktop persona gets the single-column layout — still
+    // Material, still pointer-first, but it fits instead of clipping.
     return switch (persona) {
       Persona.ios => IosShell(controller: _controller, header: header),
       Persona.android => AndroidShell(controller: _controller, header: header),
-      Persona.desktop => DesktopShell(controller: _controller, header: header),
+      Persona.desktop => _layout == Fit.roomy
+          ? DesktopShell(controller: _controller, header: header)
+          : AndroidShell(controller: _controller, header: header),
     };
   }
 
