@@ -235,28 +235,34 @@ void main() {
 }
 
 void _personaResolution() {
-  group('persona resolution prefers the host over the user agent', () {
+  group('persona resolution trusts the input device first', () {
     // Flutter web reads defaultTargetPlatform from the user agent. Inside a
-    // chat client that UA describes the webview, not the phone around it, so a
-    // view opened in Claude on a phone can render the desktop layout. These
-    // cases are the reason `personaFor` exists.
+    // chat client that UA describes the webview, not the phone around it — and
+    // iPadOS reports itself as a Macintosh, so even reading it correctly puts a
+    // tablet on the desktop layout. These cases are why `personaFor` exists.
     HostContext host({
       String? platform,
       String? hostUserAgent,
       String? navigatorUserAgent,
-      bool? touch,
-      bool? hover,
+      bool? pointerCoarse,
+      bool? hoverNone,
+      int? maxTouchPoints,
     }) =>
         HostContext(
           hostPlatform: platform,
           hostUserAgent: hostUserAgent,
           navigatorUserAgent: navigatorUserAgent,
-          touch: touch,
-          hover: hover,
+          pointerCoarse: pointerCoarse,
+          hoverNone: hoverNone,
+          maxTouchPoints: maxTouchPoints,
         );
 
-    test('a mobile host never gets the desktop layout', () {
-      expect(personaFor(host(platform: 'mobile')), isNot(Persona.desktop));
+    test('a coarse pointer with no hover is never the desktop layout', () {
+      // The host said nothing at all; the browser said finger.
+      expect(
+        personaFor(host(pointerCoarse: true, hoverNone: true)),
+        isNot(Persona.desktop),
+      );
     });
 
     test('the host user agent decides iOS from Android', () {
@@ -270,39 +276,36 @@ void _personaResolution() {
       );
     });
 
-    test('the browser user agent is the fallback, not the first answer', () {
+    test('an iPad claiming to be a Macintosh is still iOS', () {
+      // The only thing separating this from a laptop is the input device.
       expect(
         personaFor(host(
-          platform: 'mobile',
+          pointerCoarse: true,
+          hoverNone: true,
+          maxTouchPoints: 5,
+          navigatorUserAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+        )),
+        Persona.ios,
+      );
+    });
+
+    test('the browser user agent still resolves a phone', () {
+      expect(
+        personaFor(host(
+          pointerCoarse: true,
+          hoverNone: true,
           navigatorUserAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8)',
         )),
         Persona.android,
       );
-      expect(
-        personaFor(host(
-          platform: 'mobile',
-          navigatorUserAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)',
-        )),
-        Persona.ios,
-      );
     });
 
-    test('a desktop host stays pointer-first', () {
+    test('a real desktop stays pointer-first', () {
+      expect(
+        personaFor(host(platform: 'web', pointerCoarse: false, hoverNone: false)),
+        Persona.desktop,
+      );
       expect(personaFor(host(platform: 'desktop')), Persona.desktop);
-      expect(personaFor(host(platform: 'web')), Persona.desktop);
-    });
-
-    test('a touch-only web host is treated as a phone', () {
-      // Claude on a tablet reports `web` with touch and no hover.
-      expect(
-        personaFor(host(
-          platform: 'web',
-          touch: true,
-          hover: false,
-          hostUserAgent: 'claude-ios',
-        )),
-        Persona.ios,
-      );
     });
 
     test('no host information falls back to the old behaviour', () {

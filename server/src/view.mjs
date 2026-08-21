@@ -23,14 +23,28 @@ export function renderViewHtml({ origin }) {
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Showtime</title>
 <style>
-  /* When Flutter mounts in this document, this *is* the app's page — so it
-     needs what app/web/index.html sets for the nested case. */
+  /* When Flutter mounts in this document, this *is* the app's page.
+     overflow:hidden belongs on a page that owns the whole viewport; here
+     the document is a panel in someone else's conversation, and hiding the
+     overflow means anything past the panel's height is simply unreachable —
+     which on a phone is most of the app. Flutter scrolls its own content, and
+     the document scrolls if it ever needs to. overscroll-behavior:contain
+     keeps a swipe at the end of a list from dragging the chat behind it,
+     without disabling scrolling itself. */
   html, body {
-    margin: 0; padding: 0; height: 100%; background: transparent;
-    overflow: hidden;
-    overscroll-behavior: none;
+    margin: 0; padding: 0; background: transparent;
+    overscroll-behavior: contain;
     -webkit-tap-highlight-color: transparent;
   }
+  html { height: 100%; }
+  body { min-height: 100%; }
+
+  /* Flutter handles every gesture itself, including scrolling its own lists.
+     Without this the browser may decide a vertical swipe belongs to an
+     ancestor — and the ancestor here is somebody's chat transcript, so the
+     conversation scrolls under your finger and the view never moves. Claiming
+     the gesture is what makes the app scrollable by touch inside a panel. */
+  html, body { touch-action: none; }
   #app { display: block; width: 100%; height: 100%; border: 0; }
   #status {
     position: absolute; inset: 0; display: grid; place-items: center;

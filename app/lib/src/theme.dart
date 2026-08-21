@@ -37,64 +37,78 @@ Persona detectPersona() => switch (defaultTargetPlatform) {
       _ => Persona.desktop,
     };
 
-/// What we are running on, preferring the host's answer to the browser's.
+/// What we are running on, in order of how much the answer can be trusted.
 ///
 /// `defaultTargetPlatform` on Flutter web is inferred from the user agent, and
-/// inside a chat client the user agent describes the *webview* — so a view
-/// opened in Claude on an iPhone can report itself as a desktop and render the
-/// wrong design language entirely. The host knows what device it is on, and
-/// SEP-1865 gives it fields to say so, so ask before sniffing:
+/// inside a chat client the user agent describes the *webview*, not the phone
+/// around it. Worse, iPadOS reports itself as a Macintosh, so even a correct
+/// reading of the UA puts a tablet on the desktop layout. Getting this wrong is
+/// the one unforgivable bug for an adaptive UI, so it asks in this order:
 ///
-///  1. `hostContext.platform` — `mobile` rules out the desktop layout outright.
-///  2. `hostContext.userAgent` — the host app's own identifier, which is what
-///     separates iOS from Android once we know it is a phone.
-///  3. the browser's user agent, then `defaultTargetPlatform`, unchanged.
-///
-/// A host that sends none of it lands exactly where this code always was.
+///  1. **The input device.** `(pointer: coarse)` and `(hover: none)` come from
+///     the browser, cost nothing, and cannot be misreported by a UA string. A
+///     phone or tablet answers coarse-and-no-hover whatever else it claims.
+///  2. **`hostContext.platform`** — `mobile` settles it when the host sends it.
+///  3. **Names**, from the host's own identifier then the browser's UA, to
+///     separate iOS from Android once we know it is a touch device.
+///  4. **`defaultTargetPlatform`**, unchanged, when there is nothing else.
 Persona personaFor(HostContext? host) {
   if (host == null) return detectPersona();
 
-  final fromHost = _appleOrAndroid('${host.hostUserAgent ?? ''} '
-      '${host.navigatorUserAgent ?? ''}');
+  final named = _appleOrAndroid(
+    '${host.hostUserAgent ?? ''} ${host.navigatorUserAgent ?? ''}',
+  );
 
-  switch (host.hostPlatform) {
-    case 'mobile':
-      // Known to be a phone. Pick a design language; iOS is the safer default
-      // for an unrecognised one, since Cupertino degrades to plain-looking
-      // controls where Material 3 asserts a brand.
-      return fromHost ?? (detectPersona() == Persona.android
-          ? Persona.android
-          : Persona.ios);
-    case 'desktop':
-    case 'web':
-      // A desktop chat client can still be a touch laptop; the layout that
-      // matters here is pointer-first either way.
-      return host.touch == true && host.hover == false
-          ? (fromHost ?? Persona.ios)
-          : Persona.desktop;
-    default:
-      return fromHost ?? detectPersona();
+  if (_isTouchDevice(host)) {
+    // Known to be a touch device. `named` is usually right; an iPad claiming
+    // to be a Macintosh falls through to iOS, which is what it is.
+    return named ?? (detectPersona() == Persona.android
+        ? Persona.android
+        : Persona.ios);
   }
+
+  if (host.hostPlatform == 'desktop' || host.hostPlatform == 'web') {
+    return Persona.desktop;
+  }
+
+  return named ?? detectPersona();
+}
+
+/// Whether this is a finger, not a mouse.
+///
+/// The media queries are the trustworthy part. `maxTouchPoints` catches an
+/// iPad, which answers `pointer: coarse` but is otherwise indistinguishable
+/// from a laptop by its user agent. The host's own `deviceCapabilities` and
+/// `platform` are consulted last, as corroboration rather than evidence.
+bool _isTouchDevice(HostContext host) {
+  if (host.pointerCoarse == true && host.hoverNone == true) return true;
+  if (host.hostPlatform == 'mobile') return true;
+  if (host.touch == true && host.hover == false) return true;
+  if ((host.maxTouchPoints ?? 0) > 1 && host.hoverNone == true) return true;
+  return false;
 }
 
 /// iOS or Android if either is named, otherwise nothing.
 Persona? _appleOrAndroid(String haystack) {
   final s = haystack.toLowerCase();
   if (s.contains('android')) return Persona.android;
-  if (RegExp(r'iphone|ipad|ipod|\bios\b|darwin').hasMatch(s)) return Persona.ios;
+  if (RegExp(r'iphone|ipad|ipod|\bios\b|darwin|macintosh|mac os')
+      .hasMatch(s)) {
+    return Persona.ios;
+  }
   return null;
 }
 
 /// How much room the host actually gave us.
 ///
-/// Persona and fit are different questions, and conflating them is what makes
-/// a view look wrong inside a chat client. Persona decides the *design
-/// language*; fit decides the *layout*. A desktop browser can hand this view a
-/// 700x420 slot in the middle of a conversation, and the two-column layout —
-/// month grid, times column, a full house at full size — needs roughly
-/// 820x560 before it stops being a scrollbar.
+/// Persona and fit are different questions, and conflating them is what makes a
+/// view look wrong inside a chat client. Persona decides the *design language*;
+/// fit decides the *layout*. A desktop browser can hand this view a 700x420
+/// slot in the middle of a conversation, and the two-column layout — month
+/// grid, times column, a full house at full size — needs roughly 820x560
+/// before it stops being a scrollbar.
 enum Fit {
-  /// A single column that scrolls, with sheets for the big surfaces.
+  /// A single column, with sheets for the big surfaces.
   compact,
 
   /// Room for the side-by-side layout.

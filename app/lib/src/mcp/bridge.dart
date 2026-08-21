@@ -32,6 +32,10 @@ class HostContext {
     this.navigatorUserAgent,
     this.touch,
     this.hover,
+    this.pointerCoarse,
+    this.hoverNone,
+    this.maxTouchPoints,
+    this.screenWidth,
     this.safeAreaInsets = EdgeInsets.zero,
   });
 
@@ -67,6 +71,15 @@ class HostContext {
   final bool? touch;
   final bool? hover;
 
+  /// What the browser knows about the input device, which no host has to send
+  /// and no user agent can misreport. A phone answers coarse/none whatever its
+  /// webview claims to be; an iPad reports itself as a Macintosh and is only
+  /// distinguishable from a laptop by these.
+  final bool? pointerCoarse;
+  final bool? hoverNone;
+  final int? maxTouchPoints;
+  final int? screenWidth;
+
   /// Notch and home-indicator margins, when the host reports them.
   final EdgeInsets safeAreaInsets;
 
@@ -89,6 +102,10 @@ class HostContext {
         navigatorUserAgent: j['navigatorUserAgent'] as String?,
         touch: j['touch'] as bool?,
         hover: j['hover'] as bool?,
+        pointerCoarse: j['pointerCoarse'] as bool?,
+        hoverNone: j['hoverNone'] as bool?,
+        maxTouchPoints: (j['maxTouchPoints'] as num?)?.toInt(),
+        screenWidth: (j['screenWidth'] as num?)?.toInt(),
         safeAreaInsets: _insets(j['safeAreaInsets']),
       );
 
@@ -120,6 +137,11 @@ class HostContext {
             patch['navigatorUserAgent'] as String? ?? navigatorUserAgent,
         touch: patch['touch'] as bool? ?? touch,
         hover: patch['hover'] as bool? ?? hover,
+        pointerCoarse: patch['pointerCoarse'] as bool? ?? pointerCoarse,
+        hoverNone: patch['hoverNone'] as bool? ?? hoverNone,
+        maxTouchPoints:
+            (patch['maxTouchPoints'] as num?)?.toInt() ?? maxTouchPoints,
+        screenWidth: (patch['screenWidth'] as num?)?.toInt() ?? screenWidth,
         safeAreaInsets: patch['safeAreaInsets'] == null
             ? safeAreaInsets
             : _insets(patch['safeAreaInsets']),

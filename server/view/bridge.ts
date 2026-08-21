@@ -210,7 +210,16 @@ function snapshotContext(context: Record<string, unknown> | undefined) {
     touch: device?.touch ?? null,
     hover: device?.hover ?? null,
     safeAreaInsets: context?.safeAreaInsets ?? null,
-    // The browser's own answer, kept as the fallback and for diagnostics.
+
+    // What the *browser* can tell us about the input device, which is the
+    // part no host has to send and no user agent can lie about. A phone
+    // answers coarse/none here whatever its webview claims to be, and an iPad
+    // — which reports itself as a Macintosh — answers coarse with touch
+    // points, which is the only way to tell it from a laptop.
+    pointerCoarse: matchMedia("(pointer: coarse)").matches,
+    hoverNone: matchMedia("(hover: none)").matches,
+    maxTouchPoints: navigator.maxTouchPoints ?? 0,
+    screenWidth: screen.width,
     navigatorUserAgent: navigator.userAgent,
   };
 }

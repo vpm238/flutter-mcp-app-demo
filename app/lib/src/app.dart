@@ -159,7 +159,13 @@ class _ShowtimeAppState extends State<ShowtimeApp> {
       };
     }
 
-    final header = widget.showChrome ? _chrome(context, persona) : null;
+    // The persona switcher is a demo affordance, and on a phone-sized panel it
+    // costs a fifth of the visible height to show four chips, three of which
+    // are wrong for the device in your hand. Inside a host, at that size, the
+    // detected persona is the point — so spend the room on the app.
+    final showSwitcher =
+        widget.showChrome && !(_layout == Fit.compact && widget.host.isHosted);
+    final header = showSwitcher ? _chrome(context, persona) : null;
 
     // The desktop *shell* is a layout, not a design language. In a slot too
     // small for it, a desktop persona gets the single-column layout — still

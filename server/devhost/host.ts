@@ -66,6 +66,16 @@ function hostContext() {
     displayMode: "inline" as const,
     availableDisplayModes: ["inline" as const, "fullscreen" as const],
     containerDimensions: { maxWidth: panel().width, maxHeight: panel().height },
+    // A phone-sized panel is a phone: send what a mobile host sends, so the
+    // view's device detection is exercised rather than bypassed.
+    ...(panel().width <= 480
+      ? {
+          platform: "mobile" as const,
+          userAgent: new URLSearchParams(location.search).get("as") ?? "claude-ios",
+          deviceCapabilities: { touch: true, hover: false },
+          safeAreaInsets: { top: 44, right: 0, bottom: 34, left: 0 },
+        }
+      : { platform: "web" as const, deviceCapabilities: { touch: false, hover: true } }),
     styles: {
       variables: dark
         ? {
