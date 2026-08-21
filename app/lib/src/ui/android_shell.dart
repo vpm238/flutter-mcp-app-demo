@@ -413,34 +413,42 @@ Future<void> openAndroidSeatSheet(
   BuildContext context,
   BookingController controller,
 ) async {
-  // A modal sheet is positioned against the Flutter viewport, and inside a
-  // host that viewport is the iframe — which can be taller than the part of it
-  // the user can see. Opened in a conversation panel, the sheet lands below
-  // the visible area: laid out correctly, and completely invisible. Take the
-  // screen first, and only then measure.
-  await Skin.of(context).makeRoom();
-  if (!context.mounted) return;
-
+  // Deliberately *not* asking the host for fullscreen first.
+  //
+  // That was the previous fix for a sheet landing below the visible panel, and
+  // it is worse than the problem: a host may present fullscreen by re-creating
+  // the frame rather than resizing it, which restarts the app and destroys the
+  // sheet before it opens. Claude on Android does exactly that, and the result
+  // is a picker that appears to do nothing at all. Reproduced with
+  // `/devhost/?fullscreen=remount`.
+  //
+  // So the sheet sizes itself to the viewport it has. Fullscreen stays a thing
+  // the user can ask for with the expand control, where a restart is at least
+  // something they initiated.
   final palette = Skin.of(context).palette;
   final screen = MediaQuery.sizeOf(context);
 
   // Size the sheet to the house rather than to the screen. The map's height
   // follows from its width, so a fixed-fraction sheet leaves a band of empty
   // grey above and below it on a tall phone.
+  //
+  // The map gets the room left *after* the chrome, not the whole screen. Fit
+  // it to the screen and on a short panel it is taller than the space it has,
+  // and the legend and the Done button end up drawn over the back rows.
+  const chromeHeight = 64.0 + 44.0 + 78.0; // title, legend, footer
+  final ceiling = screen.height * 0.9;
+  final forTheMap = math.max(140.0, ceiling - chromeHeight - 24);
+
   final map = controller.seatMap;
   final geometry = SeatGeometry.fit(
     maxWidth: screen.width - 20,
-    maxHeight: screen.height,
+    maxHeight: forTheMap,
     rowCount: map?.rows.length ?? 14,
     colCount: map?.seatsPerRow ?? 18,
     aislesAfter: map?.aislesAfter ?? const [2, 15],
     style: SeatMapStyle.forPersona(Persona.android),
   );
-  const chromeHeight = 64.0 + 44.0 + 78.0; // title, legend, footer
-  final sheetHeight = math.min(
-    screen.height * 0.9,
-    geometry.height + chromeHeight + 24,
-  );
+  final sheetHeight = math.min(ceiling, geometry.height + chromeHeight + 24);
 
   return showModalBottomSheet<void>(
     context: context,
@@ -482,12 +490,19 @@ Future<void> openAndroidSeatSheet(
                 const Expanded(child: Center(child: CircularProgressIndicator()))
               else ...[
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: SeatMapView(
-                      map: map,
-                      controller: controller,
-                      style: SeatMapStyle.forPersona(Persona.android),
+                  // The map fits itself to these constraints, but its seat size
+                  // has a floor for touch targets — so in a genuinely short
+                  // panel it can still be taller than the box. Clipping keeps
+                  // the back rows out of the legend and the Done button rather
+                  // than drawing over them.
+                  child: ClipRect(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: SeatMapView(
+                        map: map,
+                        controller: controller,
+                        style: SeatMapStyle.forPersona(Persona.android),
+                      ),
                     ),
                   ),
                 ),

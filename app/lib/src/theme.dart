@@ -310,12 +310,6 @@ class Skin extends InheritedWidget {
 
   void note(String stage, String detail) => trace?.call(stage, detail);
 
-  /// Take the whole screen before opening something big, when there is not
-  /// enough of it. A no-op where the host does not offer fullscreen.
-  Future<void> makeRoom() async {
-    if (fit == Fit.compact) await requestRoom?.call();
-  }
-
   bool get isIOS => persona == Persona.ios;
   bool get isAndroid => persona == Persona.android;
   bool get isDesktop => persona == Persona.desktop;

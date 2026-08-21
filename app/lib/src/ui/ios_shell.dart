@@ -272,9 +272,6 @@ Future<void> _openWheel(
   BuildContext context,
   BookingController controller,
 ) async {
-  await Skin.of(context).makeRoom();
-  if (!context.mounted) return;
-
   final palette = Skin.of(context).palette;
   await showCupertinoModalPopup<void>(
     context: context,
@@ -508,11 +505,9 @@ Future<void> openIosSeatSheet(
   BuildContext context,
   BookingController controller,
 ) async {
-  // See the note in openAndroidSeatSheet: a route pushed inside a panel is
-  // sized to the frame, not to what the user can see of it.
-  await Skin.of(context).makeRoom();
-  if (!context.mounted) return;
-
+  // No fullscreen request first — see the note in openAndroidSeatSheet. A
+  // full-screen route is anchored at the top of the viewport anyway, so it
+  // stays visible even when the frame is taller than the panel.
   await Navigator.of(context, rootNavigator: true).push<void>(
     CupertinoPageRoute<void>(
       fullscreenDialog: true,

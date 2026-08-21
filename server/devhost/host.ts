@@ -252,6 +252,22 @@ async function boot() {
     if (iframe) {
       iframe.style.height =
         granted === "fullscreen" ? "90vh" : `${panel().height}px`;
+
+      // `?fullscreen=remount` models a host that presents fullscreen by
+      // re-creating the frame rather than resizing it. That restarts the app
+      // and drops whatever it had open — which, for a view that asks for
+      // fullscreen in order to open a sheet, means the sheet never appears and
+      // the UI looks dead. Worth being able to reproduce.
+      if (
+        granted === "fullscreen" &&
+        new URLSearchParams(location.search).get("fullscreen") === "remount"
+      ) {
+        const html = iframe.getAttribute("srcdoc") ?? "";
+        iframe.removeAttribute("srcdoc");
+        iframe.setAttribute("srcdoc", html);
+        log("display-mode", "fullscreen → frame REMOUNTED (app restarts)");
+        return { mode: granted };
+      }
     }
     log("display-mode", `${mode} → ${granted}`);
     return { mode: granted };
