@@ -10,6 +10,7 @@
  * no CORS and run under our headers rather than the host's CSP.
  */
 
+import { renderDiagnoseHtml } from "./diagnose.mjs";
 import { handleRpc, SERVER_INFO } from "./mcp.mjs";
 
 const CORS = {
@@ -31,6 +32,15 @@ export default {
 
     if (url.pathname === "/mcp" || url.pathname === "/mcp/") {
       return handleMcp(request, url);
+    }
+
+    // The same probe the `diagnose_view` tool renders, as a normal page. Opening
+    // it directly tells you whether the HTML itself is fine — which separates
+    // "our content is broken" from "the host never rendered it".
+    if (url.pathname === "/diagnose") {
+      return new Response(renderDiagnoseHtml({ origin: url.origin }), {
+        headers: { "content-type": "text/html; charset=utf-8", ...CORS },
+      });
     }
 
     if (url.pathname === "/health") {
