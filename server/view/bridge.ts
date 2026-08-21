@@ -145,7 +145,14 @@ let app = makeApp();
 
 /** What the shell already knows by the time the report runs. */
 function probeContext() {
-  return { mount: chosenMount, build: BUILD };
+  // The host context goes into the report too: which platform the host says
+  // it is on is what the view needs to pick a design language, and it is the
+  // one thing you cannot check from outside the sandbox.
+  return {
+    mount: chosenMount,
+    build: BUILD,
+    hostContext: JSON.stringify(snapshotContext(app.hostContext)),
+  };
 }
 
 /** Post a report as a turn, so it is readable by the model and not only on screen. */
@@ -179,6 +186,10 @@ function snapshotContext(context: Record<string, unknown> | undefined) {
     | { height?: number; maxHeight?: number }
     | undefined;
 
+  const device = context?.deviceCapabilities as
+    | { touch?: boolean; hover?: boolean }
+    | undefined;
+
   return {
     theme: context?.theme ?? "light",
     styles: styles ?? {},
@@ -186,6 +197,21 @@ function snapshotContext(context: Record<string, unknown> | undefined) {
     availableDisplayModes: context?.availableDisplayModes ?? ["inline"],
     maxHeight: dimensions?.maxHeight ?? dimensions?.height ?? null,
     hostName: app.hostInfo?.name ?? null,
+
+    // What the app is actually running on. Flutter web infers this from the
+    // user agent, which is right in a browser and wrong in a chat client's
+    // webview — the UA there describes the webview, not the phone around it.
+    // The host knows, and the protocol has fields for it, so ask rather than
+    // sniff. `hostPlatform` is web|desktop|mobile; `hostUserAgent` identifies
+    // the host app itself, which is what distinguishes iOS from Android.
+    hostPlatform: context?.platform ?? null,
+    hostUserAgent: context?.userAgent ?? null,
+    locale: context?.locale ?? null,
+    touch: device?.touch ?? null,
+    hover: device?.hover ?? null,
+    safeAreaInsets: context?.safeAreaInsets ?? null,
+    // The browser's own answer, kept as the fallback and for diagnostics.
+    navigatorUserAgent: navigator.userAgent,
   };
 }
 

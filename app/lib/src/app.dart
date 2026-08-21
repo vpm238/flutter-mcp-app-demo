@@ -78,7 +78,11 @@ class _ShowtimeAppState extends State<ShowtimeApp> {
     super.dispose();
   }
 
-  Persona get _persona => _override ?? detectPersona();
+  /// The host's answer where it has one, the browser's otherwise — see
+  /// `personaFor`. A chat client's webview lies about the device it is in.
+  Persona get _detected => personaFor(widget.host.isHosted ? _hostContext : null);
+
+  Persona get _persona => _override ?? _detected;
 
   /// Ask the host for a frame tall enough for this persona's layout.
   void _reportSize() {
@@ -165,7 +169,7 @@ class _ShowtimeAppState extends State<ShowtimeApp> {
                 scrollDirection: Axis.horizontal,
                 child: PersonaSwitcher(
                   value: _override,
-                  detected: detectPersona(),
+                  detected: _detected,
                   onChanged: _setPersona,
                   dense: persona != Persona.desktop,
                 ),

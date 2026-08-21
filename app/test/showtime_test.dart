@@ -23,6 +23,8 @@ Future<void> _pumpApp(WidgetTester tester, Persona persona) async {
 }
 
 void main() {
+  _personaResolution();
+
   group('catalog', () {
     test('the generated house is stable for a given slot id', () {
       final a = seatMapFor('lighthouse:2026-09-12:1200');
@@ -227,6 +229,84 @@ void main() {
       expect(find.text('No seats selected yet.'), findsNothing);
       expect(find.textContaining(RegExp(r'Row [A-N], seat \d+')), findsWidgets);
       expect(find.text('Confirm booking'), findsOneWidget);
+    });
+  });
+}
+
+void _personaResolution() {
+  group('persona resolution prefers the host over the user agent', () {
+    // Flutter web reads defaultTargetPlatform from the user agent. Inside a
+    // chat client that UA describes the webview, not the phone around it, so a
+    // view opened in Claude on a phone can render the desktop layout. These
+    // cases are the reason `personaFor` exists.
+    HostContext host({
+      String? platform,
+      String? hostUserAgent,
+      String? navigatorUserAgent,
+      bool? touch,
+      bool? hover,
+    }) =>
+        HostContext(
+          hostPlatform: platform,
+          hostUserAgent: hostUserAgent,
+          navigatorUserAgent: navigatorUserAgent,
+          touch: touch,
+          hover: hover,
+        );
+
+    test('a mobile host never gets the desktop layout', () {
+      expect(personaFor(host(platform: 'mobile')), isNot(Persona.desktop));
+    });
+
+    test('the host user agent decides iOS from Android', () {
+      expect(
+        personaFor(host(platform: 'mobile', hostUserAgent: 'claude-ios/1.2')),
+        Persona.ios,
+      );
+      expect(
+        personaFor(host(platform: 'mobile', hostUserAgent: 'claude-android/1.2')),
+        Persona.android,
+      );
+    });
+
+    test('the browser user agent is the fallback, not the first answer', () {
+      expect(
+        personaFor(host(
+          platform: 'mobile',
+          navigatorUserAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8)',
+        )),
+        Persona.android,
+      );
+      expect(
+        personaFor(host(
+          platform: 'mobile',
+          navigatorUserAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)',
+        )),
+        Persona.ios,
+      );
+    });
+
+    test('a desktop host stays pointer-first', () {
+      expect(personaFor(host(platform: 'desktop')), Persona.desktop);
+      expect(personaFor(host(platform: 'web')), Persona.desktop);
+    });
+
+    test('a touch-only web host is treated as a phone', () {
+      // Claude on a tablet reports `web` with touch and no hover.
+      expect(
+        personaFor(host(
+          platform: 'web',
+          touch: true,
+          hover: false,
+          hostUserAgent: 'claude-ios',
+        )),
+        Persona.ios,
+      );
+    });
+
+    test('no host information falls back to the old behaviour', () {
+      expect(personaFor(null), detectPersona());
+      expect(personaFor(host()), detectPersona());
     });
   });
 }

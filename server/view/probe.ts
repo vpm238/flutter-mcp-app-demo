@@ -15,7 +15,7 @@ type Verdict = "ok" | "bad" | "warn";
 export function renderProbe(
   appOrigin: string,
   report?: (summary: string) => void,
-  context?: { mount?: string; build?: string },
+  context?: { mount?: string; build?: string; hostContext?: string },
 ) {
   // Every finding, collected so the probe can post them into the conversation.
   // A rendered panel is only readable by whoever is looking at the screen; the
@@ -90,6 +90,7 @@ export function renderProbe(
   // part that says which of the two mounts this host actually permitted.
   if (context?.mount) row("mount chosen", context.mount);
   if (context?.build) row("shell build", context.build);
+  if (context?.hostContext) row("host context", context.hostContext);
 
   row("location.origin", location.origin);
   row("opaque origin", String(location.origin === "null"));

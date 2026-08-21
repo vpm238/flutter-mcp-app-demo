@@ -28,11 +28,62 @@ enum Persona {
 }
 
 /// What the browser says we are running on.
+///
+/// Correct in a real browser, and the only thing available when this build is
+/// opened as a plain web page.
 Persona detectPersona() => switch (defaultTargetPlatform) {
       TargetPlatform.iOS => Persona.ios,
       TargetPlatform.android => Persona.android,
       _ => Persona.desktop,
     };
+
+/// What we are running on, preferring the host's answer to the browser's.
+///
+/// `defaultTargetPlatform` on Flutter web is inferred from the user agent, and
+/// inside a chat client the user agent describes the *webview* — so a view
+/// opened in Claude on an iPhone can report itself as a desktop and render the
+/// wrong design language entirely. The host knows what device it is on, and
+/// SEP-1865 gives it fields to say so, so ask before sniffing:
+///
+///  1. `hostContext.platform` — `mobile` rules out the desktop layout outright.
+///  2. `hostContext.userAgent` — the host app's own identifier, which is what
+///     separates iOS from Android once we know it is a phone.
+///  3. the browser's user agent, then `defaultTargetPlatform`, unchanged.
+///
+/// A host that sends none of it lands exactly where this code always was.
+Persona personaFor(HostContext? host) {
+  if (host == null) return detectPersona();
+
+  final fromHost = _appleOrAndroid('${host.hostUserAgent ?? ''} '
+      '${host.navigatorUserAgent ?? ''}');
+
+  switch (host.hostPlatform) {
+    case 'mobile':
+      // Known to be a phone. Pick a design language; iOS is the safer default
+      // for an unrecognised one, since Cupertino degrades to plain-looking
+      // controls where Material 3 asserts a brand.
+      return fromHost ?? (detectPersona() == Persona.android
+          ? Persona.android
+          : Persona.ios);
+    case 'desktop':
+    case 'web':
+      // A desktop chat client can still be a touch laptop; the layout that
+      // matters here is pointer-first either way.
+      return host.touch == true && host.hover == false
+          ? (fromHost ?? Persona.ios)
+          : Persona.desktop;
+    default:
+      return fromHost ?? detectPersona();
+  }
+}
+
+/// iOS or Android if either is named, otherwise nothing.
+Persona? _appleOrAndroid(String haystack) {
+  final s = haystack.toLowerCase();
+  if (s.contains('android')) return Persona.android;
+  if (RegExp(r'iphone|ipad|ipod|\bios\b|darwin').hasMatch(s)) return Persona.ios;
+  return null;
+}
 
 /// Resolved colours for one persona + host theme combination.
 @immutable

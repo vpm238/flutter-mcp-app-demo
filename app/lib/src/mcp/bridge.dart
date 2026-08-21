@@ -14,6 +14,8 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/painting.dart' show EdgeInsets;
+
 import 'raw_bridge.dart';
 
 /// What the host told us about itself.
@@ -25,6 +27,12 @@ class HostContext {
     this.availableDisplayModes = const ['inline'],
     this.maxHeight,
     this.hostName,
+    this.hostPlatform,
+    this.hostUserAgent,
+    this.navigatorUserAgent,
+    this.touch,
+    this.hover,
+    this.safeAreaInsets = EdgeInsets.zero,
   });
 
   /// `light` or `dark`, as reported by the host.
@@ -40,6 +48,28 @@ class HostContext {
   final double? maxHeight;
   final String? hostName;
 
+  /// `web`, `desktop` or `mobile`, straight from the host.
+  ///
+  /// Flutter web derives `defaultTargetPlatform` from the user agent, which is
+  /// correct in a browser and wrong inside a chat client's webview: the UA
+  /// describes the webview, not the phone around it. So a view opened in
+  /// Claude on an iPhone can look like a desktop. The host already knows, and
+  /// the protocol carries the answer.
+  final String? hostPlatform;
+
+  /// The host application's own identifier — what tells iOS from Android when
+  /// `hostPlatform` only says `mobile`.
+  final String? hostUserAgent;
+
+  /// The browser's user agent, kept as the last resort.
+  final String? navigatorUserAgent;
+
+  final bool? touch;
+  final bool? hover;
+
+  /// Notch and home-indicator margins, when the host reports them.
+  final EdgeInsets safeAreaInsets;
+
   bool get isDark => theme == 'dark';
   bool get canGoFullscreen => availableDisplayModes.contains('fullscreen');
 
@@ -54,7 +84,24 @@ class HostContext {
                 .toList(),
         maxHeight: (j['maxHeight'] as num?)?.toDouble(),
         hostName: j['hostName'] as String?,
+        hostPlatform: j['hostPlatform'] as String?,
+        hostUserAgent: j['hostUserAgent'] as String?,
+        navigatorUserAgent: j['navigatorUserAgent'] as String?,
+        touch: j['touch'] as bool?,
+        hover: j['hover'] as bool?,
+        safeAreaInsets: _insets(j['safeAreaInsets']),
       );
+
+  static EdgeInsets _insets(Object? raw) {
+    if (raw is! Map) return EdgeInsets.zero;
+    double side(String key) => (raw[key] as num?)?.toDouble() ?? 0;
+    return EdgeInsets.fromLTRB(
+      side('left'),
+      side('top'),
+      side('right'),
+      side('bottom'),
+    );
+  }
 
   HostContext merge(Map<String, dynamic> patch) => HostContext(
         theme: patch['theme'] as String? ?? theme,
@@ -67,6 +114,15 @@ class HostContext {
                 availableDisplayModes,
         maxHeight: (patch['maxHeight'] as num?)?.toDouble() ?? maxHeight,
         hostName: patch['hostName'] as String? ?? hostName,
+        hostPlatform: patch['hostPlatform'] as String? ?? hostPlatform,
+        hostUserAgent: patch['hostUserAgent'] as String? ?? hostUserAgent,
+        navigatorUserAgent:
+            patch['navigatorUserAgent'] as String? ?? navigatorUserAgent,
+        touch: patch['touch'] as bool? ?? touch,
+        hover: patch['hover'] as bool? ?? hover,
+        safeAreaInsets: patch['safeAreaInsets'] == null
+            ? safeAreaInsets
+            : _insets(patch['safeAreaInsets']),
       );
 }
 
