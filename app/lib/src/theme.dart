@@ -275,6 +275,7 @@ class Skin extends InheritedWidget {
     required this.currency,
     this.fit = Fit.roomy,
     this.requestRoom,
+    this.trace,
     required super.child,
   });
 
@@ -295,6 +296,10 @@ class Skin extends InheritedWidget {
   /// it is also just the right behaviour on a phone.
   final Future<void> Function()? requestRoom;
 
+  /// Report something to our own origin, for a bug that only happens on a
+  /// device nobody debugging it is holding.
+  final void Function(String stage, String note)? trace;
+
   static Skin of(BuildContext context) {
     final skin = context.dependOnInheritedWidgetOfExactType<Skin>();
     assert(skin != null, 'No Skin in scope');
@@ -302,6 +307,8 @@ class Skin extends InheritedWidget {
   }
 
   bool get isCompact => fit == Fit.compact;
+
+  void note(String stage, String detail) => trace?.call(stage, detail);
 
   /// Take the whole screen before opening something big, when there is not
   /// enough of it. A no-op where the host does not offer fullscreen.

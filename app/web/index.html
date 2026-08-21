@@ -117,6 +117,7 @@
       updateModelContext: function (text) { post({ method: 'updateModelContext', params: { text: text } }); },
       setSize: function (width, height) { post({ method: 'setSize', params: { width: width, height: height } }); },
       log: function (level, message) { post({ method: 'log', params: { level: level, message: message } }); },
+      beacon: function (stage, note) { post({ method: 'beacon', params: { stage: stage, note: note } }); },
       onHostContext: function (cb) { contextHandlers.push(cb); },
       onToolResult: function (cb) { resultHandlers.push(cb); },
     };

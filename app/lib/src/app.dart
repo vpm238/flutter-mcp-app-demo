@@ -119,15 +119,34 @@ class _ShowtimeAppState extends State<ShowtimeApp> {
   /// see and one positioned below the visible panel.
   Future<void> _goFullscreen() async {
     if (!widget.host.isHosted) return;
+    final before = MediaQuery.maybeSizeOf(context);
+    widget.host.beacon('make-room',
+        'mode=${_hostContext.displayMode} can=${_hostContext.canGoFullscreen} '
+        'size=${before?.width.round()}x${before?.height.round()}');
     if (_hostContext.displayMode == 'fullscreen') return;
     if (!_hostContext.canGoFullscreen) return;
     // A host that advertises fullscreen and then does not answer would
     // otherwise hold the sheet closed until the request times out. Waiting is
     // an optimisation; opening is the job.
-    await widget.host
+    final granted = await widget.host
         .requestDisplayMode('fullscreen')
-        .timeout(const Duration(milliseconds: 1200), onTimeout: () => 'inline');
-    await Future<void>.delayed(const Duration(milliseconds: 120));
+        .timeout(const Duration(milliseconds: 1200), onTimeout: () => 'timeout');
+
+    // Wait for the resize the host performs in response, rather than a fixed
+    // delay: on a real device the round trip is slower than any number I would
+    // have guessed, and a sheet opened before it lands is sized to the old
+    // frame.
+    final start = DateTime.now();
+    while (DateTime.now().difference(start) < const Duration(seconds: 2)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      if (!mounted) return;
+      final now = MediaQuery.maybeSizeOf(context);
+      if (before == null || now == null || now.height != before.height) break;
+    }
+    if (!mounted) return;
+    final after = MediaQuery.maybeSizeOf(context);
+    widget.host.beacon('room-granted',
+        'granted=$granted size=${after?.width.round()}x${after?.height.round()}');
   }
 
   void _setPersona(Persona? persona) {
@@ -149,6 +168,7 @@ class _ShowtimeAppState extends State<ShowtimeApp> {
       currency: _controller.currency,
       fit: _layout,
       requestRoom: _goFullscreen,
+      trace: widget.host.beacon,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Showtime',

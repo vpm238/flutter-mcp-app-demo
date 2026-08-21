@@ -236,6 +236,18 @@ class _SeatMapViewState extends State<SeatMapView>
 
   void _handleTap(Offset local, SeatGeometry geo) {
     final seat = _hitTest(local, geo);
+
+    // The one interaction the whole app exists for. If it stops working on a
+    // device, this says whether the tap arrived at all, where it landed, and
+    // whether anything was under it — none of which is observable from
+    // outside the phone.
+    Skin.of(context).note(
+      'seat-tap',
+      'at=${local.dx.round()},${local.dy.round()} '
+      'seat=${seat?.id ?? 'none'} bookable=${seat?.bookable ?? false} '
+      'map=${geo.width.round()}x${geo.height.round()} seat=${geo.seat.round()}',
+    );
+
     if (seat == null || !seat.bookable) return;
     HapticFeedback.selectionClick();
     setState(() => _popped = seat);

@@ -26,6 +26,9 @@ abstract class RawBridge {
   void setSize(double width, double height);
   void log(String level, String message);
 
+  /// A breadcrumb to our own origin, readable at /debug/requests.
+  void beacon(String stage, String note);
+
   void onHostContext(void Function(String json) callback);
   void onToolResult(void Function(String json) callback);
 }

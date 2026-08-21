@@ -16,6 +16,7 @@ extension type _JsBridge._(JSObject _) implements JSObject {
   external void updateModelContext(String text);
   external void setSize(double width, double height);
   external void log(String level, String message);
+  external void beacon(String stage, String note);
   external void onHostContext(JSFunction callback);
   external void onToolResult(JSFunction callback);
 }
@@ -52,6 +53,9 @@ class _WebBridge implements RawBridge {
 
   @override
   void log(String level, String message) => _js.log(level, message);
+
+  @override
+  void beacon(String stage, String note) => _js.beacon(stage, note);
 
   @override
   void onHostContext(void Function(String json) callback) =>

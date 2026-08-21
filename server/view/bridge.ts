@@ -328,6 +328,16 @@ const api = {
       logger: "showtime",
     });
   },
+
+  /// The app's own breadcrumbs, sent to our origin rather than to the host.
+  ///
+  /// A host's log channel may go nowhere visible, and a rendered panel cannot
+  /// be read by anyone who is not looking at that phone. `connect-src` grants
+  /// us our own origin, so this is the one channel that reaches a person
+  /// debugging from somewhere else.
+  beacon(stage: string, note: string) {
+    beacon(stage, note);
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -370,6 +380,7 @@ function mountDirect() {
     updateModelContext: (text: string) => api.updateModelContext(text),
     setSize: (w: number, h: number) => api.setSize(w, h),
     log: (level: string, message: string) => api.log(level, message),
+    beacon: (stage: string, note: string) => api.beacon(stage, note),
     onHostContext: (cb: (json: string) => void) => contextHandlers.push(cb),
     onToolResult: (cb: (json: string) => void) => resultHandlers.push(cb),
   };
@@ -492,6 +503,9 @@ function mountNested() {
           break;
         case "log":
           api.log(String(params.level ?? "info"), String(params.message ?? ""));
+          break;
+        case "beacon":
+          api.beacon(String(params.stage ?? "?"), String(params.note ?? ""));
           break;
         default:
           reply(message.id, undefined, `unknown method: ${message.method}`);

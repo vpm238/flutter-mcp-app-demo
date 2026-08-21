@@ -255,4 +255,12 @@ class McpHost {
   void setSize(double width, double height) => _bridge?.setSize(width, height);
 
   void log(String level, String message) => _bridge?.log(level, message);
+
+  /// A breadcrumb to our own origin, readable at `/debug/requests`.
+  ///
+  /// Inside a host there is no console and no network tab, and on a phone
+  /// there is no way to attach one. This is how a bug that only happens on a
+  /// real device gets described by the device.
+  void beacon(String stage, [String note = '']) =>
+      _bridge?.beacon(stage, note);
 }
