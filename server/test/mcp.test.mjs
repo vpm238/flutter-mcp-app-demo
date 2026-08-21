@@ -284,9 +284,10 @@ test("diagnose_view reports whether the host advertised MCP Apps", async () => {
     }),
   );
   let out = await call(rpc("tools/call", { name: "diagnose_view", arguments: {} }));
-  // Assert on the status line, not the prose that explains what it means.
+  // The structured result is what hosts actually display.
+  assert.equal(out.result.structuredContent.mcpAppsAdvertised, false);
+  assert.equal(out.result.structuredContent.client, "probe-client");
   assert.match(out.result.content[0].text, /MCP Apps: NOT ADVERTISED/);
-  assert.match(out.result.content[0].text, /probe-client/);
 
   await call(
     rpc("initialize", {
@@ -300,6 +301,9 @@ test("diagnose_view reports whether the host advertised MCP Apps", async () => {
     }),
   );
   out = await call(rpc("tools/call", { name: "diagnose_view", arguments: {} }));
+  assert.equal(out.result.structuredContent.mcpAppsAdvertised, true);
+  assert.deepEqual(out.result.structuredContent.uiMimeTypes, [
+    "text/html;profile=mcp-app",
+  ]);
   assert.match(out.result.content[0].text, /MCP Apps: ADVERTISED/);
-  assert.doesNotMatch(out.result.content[0].text, /MCP Apps: NOT ADVERTISED/);
 });

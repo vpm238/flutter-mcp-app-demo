@@ -299,22 +299,31 @@ async function callTool(name, args) {
     case "confirm_booking":
       return confirmResult(args);
     case "diagnose_view": {
-      const client = describeClient(lastInitialize);
+      const init = lastInitialize;
+      const ui = init?.capabilities?.extensions?.[UI_EXTENSION];
+
+      // The findings go in structuredContent, not just text: hosts display the
+      // structured result and hide the text block, so a report written only as
+      // text is invisible exactly where it is needed.
       return {
-        content: [
-          {
-            type: "text",
-            text:
-              "Showtime connection report — what this host told the server at " +
-              "initialize:\n\n" +
-              client +
-              "\n\nIf MCP Apps is NOT ADVERTISED, no ui:// view can render " +
-              "here regardless of what the server sends, and the interactive " +
-              "picker is unavailable on this surface. If it IS advertised, a " +
-              "panel should appear with the in-frame checks.",
-          },
-        ],
-        structuredContent: { probe: "view-environment" },
+        content: [{ type: "text", text: describeClient(init) }],
+        structuredContent: {
+          probe: "view-environment",
+          observedInitialize: Boolean(init),
+          client: init?.clientInfo?.name ?? null,
+          clientVersion: init?.clientInfo?.version ?? null,
+          protocolVersion: init?.protocolVersion ?? null,
+          mcpAppsAdvertised: Boolean(ui),
+          uiMimeTypes: ui?.mimeTypes ?? null,
+          rawCapabilities: init?.capabilities ?? null,
+          meaning: ui
+            ? "This host advertised MCP Apps, so a ui:// view should render."
+            : init
+              ? "This host did NOT advertise io.modelcontextprotocol/ui, so it " +
+                "will not render a ui:// view no matter what the server sends."
+              : "This server instance has not seen an initialize — the handshake " +
+                "landed on a different isolate. Run this again.",
+        },
       };
     }
     default:
