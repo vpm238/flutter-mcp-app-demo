@@ -333,11 +333,17 @@ test("the ui:// resource stays small enough to hand a host", async () => {
   assert.ok(kb < 40, `the view resource is ${kb.toFixed(0)} kB; it should stay well under 40`);
 });
 
+test("the view URI carries the build, so every deploy is a new cache key", async () => {
+  // Claude rendered de23f622 while the server served 90bc672e, through a
+  // disconnect and reconnect. Renaming the resource once bought a single
+  // refresh; the name has to change whenever the content does.
+  assert.match(VIEW_URI, /^ui:\/\/showtime\/booking-[0-9a-f]{8}\.html$/);
+});
+
 test("a stale registration still gets today's view, not an error", async () => {
-  // Hosts register a connector's resources once and cache what they read. We
-  // have watched Claude render a build several deploys old, so the URI a host
-  // asks for may predate the current one. Answering it with the current HTML
-  // costs nothing and is the difference between a working view and a 404.
+  // The URI a host asks for may be several builds old. Answering it with the
+  // current HTML costs nothing and is the difference between a working view
+  // and a 404.
   const legacy = "ui://showtime/booking.html";
   const response = await call(rpc("resources/read", { uri: legacy }));
   const [content] = response.result.contents;

@@ -27,6 +27,7 @@ import {
   slotsFor,
 } from "./domain.mjs";
 import { recallHandshake, rememberHandshake } from "./handshake-store.mjs";
+import { VIEW_BUILD_ID } from "./generated/view-bridge.mjs";
 import { renderViewHtml } from "./view.mjs";
 
 export const SERVER_INFO = {
@@ -36,21 +37,23 @@ export const SERVER_INFO = {
 };
 
 /**
- * The view's URI, and why it has a version in it.
+ * The view's URI, which carries the build hash.
  *
- * A host registers a connector's resources once and caches what it read. We
- * have watched Claude render a build several deploys old — the probe reported
- * findings from a version whose code no longer existed — so the content behind
- * this URI is not reliably refetched. A new URI is a new cache key, which is
- * the one lever a server actually has.
+ * A host registers a connector's resources and caches what it read. Claude has
+ * now twice rendered a build several deploys old — most recently reporting
+ * `de23f622` while the server was serving `90bc672e`, after a disconnect and
+ * reconnect. Renaming the resource once bought a single refresh and then the
+ * new name went stale too, so the name has to change whenever the content
+ * does. It is the one cache key a server controls.
  *
- * The previous URI is still served (see `resources/read`) with the *current*
- * HTML, so a registration that is stale in name still gets a correct view.
+ * Every URI this server has ever advertised is still answered with the current
+ * HTML (see `resources/read`), so a stale registration gets a working view
+ * rather than a 404.
  */
-export const VIEW_URI = "ui://showtime/booking-v2.html";
+export const VIEW_URI = `ui://showtime/booking-${VIEW_BUILD_ID}.html`;
 
-/** Registrations made before the rename still point here. */
-const LEGACY_VIEW_URIS = ["ui://showtime/booking.html"];
+/** Any URI this server has ever advertised. */
+const VIEW_URI_PREFIX = "ui://showtime/booking";
 
 const SUPPORTED_PROTOCOLS = ["2026-01-26", "2025-11-25", "2025-06-18", "2025-03-26"];
 const DEFAULT_PROTOCOL = "2025-06-18";
@@ -257,10 +260,10 @@ export async function handleRpc(message, { origin }) {
         return ok(id, { resourceTemplates: [] });
 
       case "resources/read": {
-        // Answer to the old URI as well as the current one: a host whose
-        // registration predates the rename should still get today's view
-        // rather than an error, and it costs nothing to say yes.
-        if (params.uri !== VIEW_URI && !LEGACY_VIEW_URIS.includes(params.uri)) {
+        // Answer to every URI we have ever advertised, not just today's: a
+        // host whose registration predates this build should get the current
+        // view rather than an error, and it costs nothing to say yes.
+        if (typeof params.uri !== "string" || !params.uri.startsWith(VIEW_URI_PREFIX)) {
           return err(id, -32602, `Unknown resource: ${params.uri}`);
         }
         return ok(id, {
