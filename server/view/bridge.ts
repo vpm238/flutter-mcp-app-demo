@@ -343,15 +343,48 @@ function mountDirect() {
   });
 
   // Flutter's loader resolves `main.dart.js`, `canvaskit/` and `assets/`
-  // against the document's base URI, which here is the host's, not ours.
-  const base = document.createElement("base");
-  base.href = APP_URL;
-  document.head.appendChild(base);
+  // against `document.baseURI` — which here is the host's sandbox origin, not
+  // ours. The obvious fix is a `<base href>`, and it does not work: Claude's
+  // view policy is `base-uri 'self'`, and it does not honour the spec's
+  // `baseUriDomains`. We only know that because the probe reported the policy.
+  //
+  // The loader takes the same three paths as explicit config, so pass them
+  // instead. `flutter_bootstrap.js` calls `load()` with no arguments, so wrap
+  // the loader between the two scripts: `flutter.js` installs it, we decorate
+  // it, then the bootstrap sets `buildConfig` and calls through our wrapper.
+  // No string surgery on generated code, and nothing to keep in sync.
+  const config = {
+    entrypointBaseUrl: APP_URL,
+    canvasKitBaseUrl: `${APP_URL}canvaskit/`,
+    assetBase: APP_URL,
+  };
 
-  const boot = document.createElement("script");
-  boot.src = `${APP_URL}flutter_bootstrap.js`;
-  boot.async = true;
-  document.body.appendChild(boot);
+  const loader = document.createElement("script");
+  loader.src = `${APP_URL}flutter.js`;
+  loader.addEventListener("load", () => {
+    const flutter = (window as unknown as { _flutter?: { loader?: { load?: Function } } })._flutter;
+    const load = flutter?.loader?.load;
+    if (flutter?.loader && typeof load === "function") {
+      flutter.loader.load = (options: { config?: object } = {}) =>
+        load.call(flutter.loader, {
+          ...options,
+          config: { ...config, ...options.config },
+        });
+    } else {
+      api.log("error", "flutter.js loaded but installed no loader to configure");
+    }
+
+    const boot = document.createElement("script");
+    boot.src = `${APP_URL}flutter_bootstrap.js`;
+    boot.addEventListener("error", () =>
+      api.log("error", `could not load ${APP_URL}flutter_bootstrap.js`),
+    );
+    document.body.appendChild(boot);
+  });
+  loader.addEventListener("error", () =>
+    api.log("error", `could not load ${APP_URL}flutter.js — script-src refused our origin`),
+  );
+  document.body.appendChild(loader);
 }
 
 // ---------------------------------------------------------------------------

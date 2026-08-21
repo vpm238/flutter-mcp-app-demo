@@ -78,7 +78,35 @@ function hostContext() {
  */
 function buildCsp(csp: Record<string, string[]>): string {
   const list = (key: string) => (csp[key] ?? []).join(" ");
-  const wasm = new URLSearchParams(location.search).get("wasm") !== "off";
+  const params = new URLSearchParams(location.search);
+  const wasm = params.get("wasm") !== "off";
+
+  // `?host=claude` replays the policy Claude actually applies, reported by the
+  // in-view probe rather than guessed. It differs from the spec's shape in two
+  // ways that decide the whole design: `frame-src` is `'self' blob: data:`, so
+  // `frameDomains` buys nothing and the nested mount can never work there; and
+  // `base-uri` is `'self'`, so `baseUriDomains` buys nothing either and a
+  // `<base href>` pointing at us is refused. It does grant `'unsafe-eval'`,
+  // which is why Flutter can run in the view document at all.
+  if (params.get("host") === "claude") {
+    const us = list("resourceDomains");
+    return [
+      "default-src 'self'",
+      `script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: ${us}`,
+      `style-src 'self' 'unsafe-inline' ${us}`,
+      `img-src 'self' data: blob: ${us}`,
+      `connect-src 'self' ${us}`,
+      `font-src 'self' ${us}`,
+      `media-src 'self' blob: data: ${us}`,
+      `worker-src 'self' blob: ${us}`,
+      "frame-src 'self' blob: data:",
+      "base-uri 'self'",
+      "object-src 'none'",
+      "form-action 'self'",
+    ]
+      .map((d) => d.replace(/\s+/g, " ").trim())
+      .join("; ");
+  }
 
   return [
     `default-src 'none'`,

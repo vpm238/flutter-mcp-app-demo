@@ -47,6 +47,28 @@ export default {
       return json({ lastInitialize: await getLastInitialize() });
     }
 
+    // The view pings this as it reaches each step. A request arriving here is
+    // proof the code that made it ran — which, inside a host sandbox with no
+    // console and no network tab, is otherwise unobservable.
+    if (url.pathname === "/beacon") {
+      const entry = await recordBeacon(request, {
+        stage: url.searchParams.get("stage") ?? "?",
+        note: url.searchParams.get("note") ?? undefined,
+      });
+      return json({ recorded: entry });
+    }
+
+    if (url.pathname === "/debug/requests") {
+      if (url.searchParams.get("clear") === "1") await clearBeacons();
+      const entries = await listBeacons();
+      // Rendered as a page: whoever needs to read it is the person whose
+      // browser produced the entries, and opening it there is the only way to
+      // be sure of reaching the same colo that stored them.
+      return new Response(renderBeaconPage(entries), {
+        headers: { "content-type": "text/html; charset=utf-8", ...CORS },
+      });
+    }
+
     if (url.pathname === "/health") {
       return json({ ok: true, server: SERVER_INFO });
     }
