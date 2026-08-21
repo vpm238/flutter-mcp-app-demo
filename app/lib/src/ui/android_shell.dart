@@ -53,11 +53,21 @@ class AndroidShell extends StatelessWidget {
                   ),
                 ),
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  // Clearance for the pinned bar, so the last section can scroll
+                  // clear of it instead of ending underneath.
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
                   sliver: SliverList.list(
                     children: [
-                      ShowHero(show: show, borderRadius: 20),
-                      const SizedBox(height: 22),
+                      // A shorter hero on a compact panel. The picture is
+                      // atmosphere; the controls below it are the point, and on
+                      // a 620px panel every section it pushes down is one the
+                      // user has to scroll to find.
+                      ShowHero(
+                        show: show,
+                        borderRadius: 20,
+                        height: Skin.of(context).isCompact ? 104 : 132,
+                      ),
+                      SizedBox(height: Skin.of(context).isCompact ? 16 : 22),
                       _SectionLabel('When'),
                       const SizedBox(height: 10),
                       _DateStrip(controller: controller),
@@ -67,10 +77,16 @@ class AndroidShell extends StatelessWidget {
                       _SectionLabel('How many'),
                       const SizedBox(height: 10),
                       _PartySize(controller: controller),
-                      const SizedBox(height: 24),
-                      _SectionLabel('Seats'),
-                      const SizedBox(height: 10),
-                      _SeatsCard(controller: controller),
+                      // The Seats card duplicates what the pinned bar now
+                      // says, and on a panel this short it is the section that
+                      // ends up sliced by that bar. On a compact layout the bar
+                      // is the seats affordance; here it is only clutter.
+                      if (!Skin.of(context).isCompact) ...[
+                        const SizedBox(height: 24),
+                        _SectionLabel('Seats'),
+                        const SizedBox(height: 10),
+                        _SeatsCard(controller: controller),
+                      ],
                       if (controller.error != null) ...[
                         const SizedBox(height: 12),
                         Text(
