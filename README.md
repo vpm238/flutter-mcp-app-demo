@@ -105,6 +105,34 @@ report — what was refused, and the offending policy straight out of
 a `ui/message`. A blank panel is the one outcome worth engineering away, because
 it says nothing about why.
 
+### What Claude actually allows
+
+Worth writing down, because it took a probe running inside the sandbox to find
+out and it inverts the assumption the original design was built on:
+
+```
+script-src  'self' 'unsafe-inline' 'unsafe-eval' blob: data: <your origin>
+connect-src 'self' <your origin>
+frame-src   'self' blob: data:
+base-uri    'self'
+```
+
+`'unsafe-eval'` is there, so **CanvasKit compiles fine in the view document** —
+the nesting was never necessary here. `frame-src` does not name our origin, so
+the nested frame can never load: `frameDomains` is declared per the spec and not
+honoured. `base-uri 'self'` means `baseUriDomains` is not honoured either, so a
+`<base href>` pointing at us is refused — which is why the loader gets
+`entrypointBaseUrl`, `canvasKitBaseUrl` and `assetBase` passed as config instead.
+
+Nothing about Flutter is unwelcome under that policy. What the policy forbade was
+the workaround. `/devhost/?host=claude` replays this exact CSP.
+
+One more thing that cost real time: **hosts cache the resources they registered.**
+Claude rendered a build several deploys old — the probe reported findings from
+code that no longer existed — so the view URI carries a version and
+`resources/read` still answers the previous one with current HTML. If you change
+this view and the host does not seem to notice, that is why.
+
 The nested path also has to survive sandbox flags, which *do* inherit: it runs
 `allow-scripts` **without** `allow-same-origin`, so it is an opaque origin.
 Three consequences, all handled:
@@ -143,14 +171,22 @@ Three things to open:
 | `/app/` | the app as a plain web page, on local fixtures |
 | `/devhost/` | a **real** MCP Apps host: streamable HTTP + `AppBridge`, sandboxed frame, and a transcript pane showing every message the model would see |
 | `/mcp` | the MCP endpoint itself |
+| `/debug/requests` | how far the view got, last time it ran |
 
 `/app/` takes `?persona=ios\|android\|desktop` to force a face and `?chrome=off`
 to hide the switcher.
 
 The dev host is worth a minute. It is not a mock — it drives the view with the
 official `@modelcontextprotocol/ext-apps` host bridge inside
-`sandbox="allow-scripts allow-forms"`, the same restrictions a production host
-applies. If the view works there, it works because it is spec-correct.
+`sandbox="allow-scripts allow-forms"`, and it builds and enforces the view CSP
+from the server's own declaration. `?host=claude` replays Claude's real policy
+and `?wasm=off` drops `wasm-unsafe-eval`, so both mounts are reachable locally.
+
+`/debug/requests` is the other half of that: the view pings our origin as it
+reaches each step, so when a host renders nothing you can still see how far the
+code got. It is a debugging aid rather than a feature — it records fetch
+metadata and a user agent in a one-hour cache — so take it out if you fork this
+into something real.
 
 Requires the Flutter SDK on `PATH` (or `FLUTTER=/path/to/flutter`) and Node 22+.
 
