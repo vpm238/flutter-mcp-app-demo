@@ -18,6 +18,8 @@
  */
 
 import { App, PostMessageTransport } from "@modelcontextprotocol/ext-apps";
+
+import { renderProbe } from "./probe.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 declare global {
@@ -57,6 +59,15 @@ function makeApp(): App {
 
   app.ontoolresult = (result: CallToolResult) => {
     const data = extract(result);
+
+    // `diagnose_view` reuses this resource rather than registering its own,
+    // because a tool pointing at a URI the host never registered renders
+    // nothing at all — silently.
+    if (data && (data as { probe?: string }).probe === "view-environment") {
+      renderProbe(window.__SHOWTIME_APP_URL?.replace(/\/app\/$/, "") ?? "");
+      return;
+    }
+
     latestToolResult = data;
     if (resolveFirstResult) {
       resolveFirstResult(data);

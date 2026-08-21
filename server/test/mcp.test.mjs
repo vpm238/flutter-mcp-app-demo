@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { DIAGNOSE_URI, handleRpc, VIEW_URI } from "../src/mcp.mjs";
+import { handleRpc, VIEW_URI } from "../src/mcp.mjs";
 import {
   confirmationCode,
   describeSeats,
@@ -54,8 +54,10 @@ test("every tool points at the view, in both the current and legacy meta keys", 
     ],
   );
   for (const tool of tools) {
-    const expected = tool.name === "diagnose_view" ? DIAGNOSE_URI : VIEW_URI;
-    assert.equal(tool._meta.ui.resourceUri, expected, tool.name);
+    // Every tool points at the one resource the host registers. A tool
+    // referencing a URI the host never learned about renders nothing, with no
+    // error anywhere — so this is worth asserting.
+    assert.equal(tool._meta.ui.resourceUri, VIEW_URI, tool.name);
   }
   // Older hosts only read the flat key; the entry tool must carry both.
   const entry = tools.find((t) => t.name === "book_show_seats");
@@ -72,8 +74,6 @@ test("the resource is served as an MCP app and declares the frame origin", async
 
   assert.equal(content.mimeType, "text/html;profile=mcp-app");
   assert.deepEqual(content._meta.ui.csp.frameDomains, [ORIGIN]);
-  assert.deepEqual(content._meta.ui.csp.connectDomains, []);
-  assert.deepEqual(content._meta.ui.csp.resourceDomains, []);
 
   // The shell must be self-contained: the app URL and the inlined relay.
   assert.match(content.text, /<iframe/);
@@ -250,16 +250,24 @@ test("static assets carry the headers the sandboxed frame needs", () => {
   assert.match(rule, /Cross-Origin-Embedder-Policy:\s*require-corp/i);
 });
 
-test("the diagnostic view is plain HTML with no wasm and no build dependency", async () => {
-  const { contents } = (await call(rpc("resources/read", { uri: DIAGNOSE_URI }))).result;
-  const [content] = contents;
+test("the server registers exactly one ui:// resource", async () => {
+  const { resources } = (await call(rpc("resources/list"))).result;
+  // Hosts register the resources they learn about when the connector is added.
+  // A second resource added later is invisible to them, so everything the view
+  // needs to do has to live behind this one URI.
+  assert.deepEqual(resources.map((r) => r.uri), [VIEW_URI]);
+});
 
-  assert.equal(content.mimeType, "text/html;profile=mcp-app");
-  // It has to render under the strictest policy a host might apply, so it
-  // asks for every grant and depends on nothing that could itself be blocked.
-  assert.deepEqual(content._meta.ui.csp.frameDomains, [ORIGIN]);
-  assert.deepEqual(content._meta.ui.csp.connectDomains, [ORIGIN]);
-  assert.deepEqual(content._meta.ui.csp.resourceDomains, [ORIGIN]);
-  assert.ok(!/<script[^>]+src=/.test(content.text), "no external scripts");
-  assert.match(content.text, /securitypolicyviolation/);
+test("the view can reach our origin for the checks it runs", async () => {
+  const { contents } = (await call(rpc("resources/read", { uri: VIEW_URI }))).result;
+  const csp = contents[0]._meta.ui.csp;
+  assert.deepEqual(csp.frameDomains, [ORIGIN]);
+  assert.deepEqual(csp.connectDomains, [ORIGIN]);
+  assert.deepEqual(csp.resourceDomains, [ORIGIN]);
+});
+
+test("the diagnostics probe is bundled into the shell", async () => {
+  const { contents } = (await call(rpc("resources/read", { uri: VIEW_URI }))).result;
+  assert.match(contents[0].text, /securitypolicyviolation/);
+  assert.match(contents[0].text, /view-environment/);
 });

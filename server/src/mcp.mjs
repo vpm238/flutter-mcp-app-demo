@@ -26,7 +26,6 @@ import {
   seatMapFor,
   slotsFor,
 } from "./domain.mjs";
-import { DIAGNOSE_URI, renderDiagnoseHtml } from "./diagnose.mjs";
 import { renderViewHtml } from "./view.mjs";
 
 export const SERVER_INFO = {
@@ -36,7 +35,6 @@ export const SERVER_INFO = {
 };
 
 export const VIEW_URI = "ui://showtime/booking.html";
-export { DIAGNOSE_URI };
 
 const SUPPORTED_PROTOCOLS = ["2026-01-26", "2025-11-25", "2025-06-18", "2025-03-26"];
 const DEFAULT_PROTOCOL = "2025-06-18";
@@ -132,8 +130,8 @@ const TOOLS = [
       "booking view fails to render, to find out why.",
     inputSchema: { type: "object", properties: {} },
     _meta: {
-      ui: { resourceUri: DIAGNOSE_URI, visibility: ["model"], prefersBorder: true },
-      "ui/resourceUri": DIAGNOSE_URI,
+      ui: { resourceUri: VIEW_URI, visibility: ["model"], prefersBorder: true },
+      "ui/resourceUri": VIEW_URI,
     },
   },
   {
@@ -189,14 +187,6 @@ export async function handleRpc(message, { origin }) {
         return ok(id, {
           resources: [
             {
-              uri: DIAGNOSE_URI,
-              name: "Showtime view diagnostics",
-              description:
-                "Reports what the host's view sandbox allows, and the CSP.",
-              mimeType: "text/html;profile=mcp-app",
-              _meta: { ui: diagnoseMeta(origin) },
-            },
-            {
               uri: VIEW_URI,
               name: "Showtime booking view",
               description:
@@ -213,18 +203,6 @@ export async function handleRpc(message, { origin }) {
         return ok(id, { resourceTemplates: [] });
 
       case "resources/read": {
-        if (params.uri === DIAGNOSE_URI) {
-          return ok(id, {
-            contents: [
-              {
-                uri: DIAGNOSE_URI,
-                mimeType: "text/html;profile=mcp-app",
-                text: renderDiagnoseHtml({ origin }),
-                _meta: { ui: diagnoseMeta(origin) },
-              },
-            ],
-          });
-        }
         if (params.uri !== VIEW_URI) {
           return err(id, -32602, `Unknown resource: ${params.uri}`);
         }
@@ -258,27 +236,14 @@ export async function handleRpc(message, { origin }) {
  * has to allow it. Everything else the outer shell needs is inline, which the
  * spec's default policy already permits.
  */
-/**
- * The probe asks for every domain grant the spec offers, so that each check it
- * runs is testing the host's behaviour rather than our own under-declaration.
- */
-function diagnoseMeta(origin) {
-  return {
-    csp: {
-      frameDomains: [origin],
-      connectDomains: [origin],
-      resourceDomains: [origin],
-    },
-    prefersBorder: true,
-  };
-}
-
 function viewMeta(origin) {
   return {
     csp: {
       frameDomains: [origin],
-      connectDomains: [],
-      resourceDomains: [],
+      // The diagnostics panel renders in this same resource and probes the
+      // origin directly, so it needs both of these to test anything real.
+      connectDomains: [origin],
+      resourceDomains: [origin],
     },
     prefersBorder: false,
   };
