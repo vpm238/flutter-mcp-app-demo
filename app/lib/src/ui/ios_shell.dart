@@ -217,7 +217,7 @@ class _IosBody extends StatelessWidget {
                 trailing: const CupertinoListTileChevron(),
                 onTap: slot == null
                     ? null
-                    : () => openIosSeatSheet(context, controller),
+                    : () => (() { Skin.of(context).note('choose-seats', 'pressed'); openIosSeatSheet(context, controller); })(),
               ),
             ],
           ),

@@ -377,8 +377,15 @@ class _SeatsCard extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 FilledButton.icon(
-                  onPressed:
-                      ready ? () => openAndroidSeatSheet(context, controller) : null,
+                  // Beaconed because the device reports Flutter painting and
+                  // then nothing happening: this says whether the tap reaches
+                  // a widget callback at all, or dies before Flutter sees it.
+                  onPressed: ready
+                      ? () {
+                          Skin.of(context).note('choose-seats', 'pressed');
+                          openAndroidSeatSheet(context, controller);
+                        }
+                      : null,
                   icon: const Icon(Icons.grid_view_rounded, size: 18),
                   label: const Text('Choose seats'),
                 ),

@@ -83,6 +83,36 @@ function beacon(stage: string, note?: string) {
 
 beacon("shell-booted");
 
+/**
+ * Report the first few raw pointer events, below Flutter.
+ *
+ * The device says Flutter paints and then nothing responds to touch. That has
+ * two very different causes and no way to tell them apart from the app side:
+ * either the browser never delivers a pointer event to this document — the
+ * host's own gesture handling having claimed it — or it does and Flutter is
+ * not turning it into a tap. Listening in the capture phase, before anything
+ * else can stop it, separates the two.
+ *
+ * Capped at a handful of events: this is a diagnostic, not telemetry.
+ */
+(() => {
+  let seen = 0;
+  const report = (kind: string) => (event: Event) => {
+    if (seen >= 6) return;
+    seen++;
+    const p = event as PointerEvent & { touches?: TouchList };
+    beacon(
+      "pointer",
+      `${kind} type=${p.pointerType ?? "?"} at=${Math.round(p.clientX ?? -1)},` +
+        `${Math.round(p.clientY ?? -1)} target=${(event.target as Element)?.tagName ?? "?"} ` +
+        `viewport=${window.innerWidth}x${window.innerHeight}`,
+    );
+  };
+  for (const kind of ["pointerdown", "pointerup", "pointercancel", "touchstart"]) {
+    window.addEventListener(kind, report(kind), { capture: true, passive: true });
+  }
+})();
+
 const status = document.getElementById("status");
 
 let latestToolResult: unknown = null;
