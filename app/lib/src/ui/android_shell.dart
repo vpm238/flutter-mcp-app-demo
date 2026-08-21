@@ -597,19 +597,40 @@ class _AndroidCheckout extends StatelessWidget {
                 ],
               ),
             ),
-            FilledButton(
-              onPressed: controller.canConfirm ? controller.confirmBooking : null,
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+            // The primary action lives in the pinned bar, not in a card that
+            // has to be scrolled to.
+            //
+            // On a phone panel the Seats card sits below the fold, so its
+            // Choose seats button was unreachable — and a disabled Confirm was
+            // the only thing on screen you could see and not use. The bar now
+            // offers whichever action is actually available: pick seats when
+            // there are none, confirm once there are.
+            if (!hasSeats)
+              FilledButton.icon(
+                onPressed: controller.seatMap == null &&
+                        !controller.loadingSeatMap
+                    ? null
+                    : () => openAndroidSeatSheet(context, controller),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+                ),
+                icon: const Icon(Icons.grid_view_rounded, size: 18),
+                label: const Text('Choose seats'),
+              )
+            else
+              FilledButton(
+                onPressed: controller.canConfirm ? controller.confirmBooking : null,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+                ),
+                child: controller.confirming
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Confirm'),
               ),
-              child: controller.confirming
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Confirm'),
-            ),
           ],
         ),
       ),

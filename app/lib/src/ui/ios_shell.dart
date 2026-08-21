@@ -64,7 +64,19 @@ class IosShell extends StatelessWidget {
                   ],
                 ),
               ),
-              _IosCheckoutBar(controller: controller),
+              // The primary action lives in the pinned bar, not in a card the
+              // user has to scroll to. On a phone panel the seats card sits
+              // below the fold, and a disabled Confirm was the only thing
+              // visible — see the note in android_shell.dart.
+              _IosCheckoutBar(
+                controller: controller,
+                primaryLabel: controller.selectedSeats.isEmpty
+                    ? 'Choose seats'
+                    : null,
+                onPrimary: controller.selectedSeats.isEmpty
+                    ? () => openIosSeatSheet(context, controller)
+                    : null,
+              ),
             ],
           ),
         ),
