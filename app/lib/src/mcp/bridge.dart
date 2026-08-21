@@ -181,8 +181,11 @@ class McpHost {
   Stream<Map<String, dynamic>> get onToolResult => _toolResults.stream;
 
   /// Connect to the host, or return an unhosted instance if there is none.
-  static Future<McpHost> connect() async {
-    final bridge = lookupRawBridge();
+  ///
+  /// [bridge] overrides the lookup, which is how a test gets a *hosted*
+  /// instance on the Dart VM — where there is no page and so no real bridge.
+  static Future<McpHost> connect({RawBridge? bridge}) async {
+    bridge ??= lookupRawBridge();
     if (bridge == null) {
       return McpHost._(null, const HostContext(), null);
     }

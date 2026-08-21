@@ -223,16 +223,52 @@ class _ShowtimeAppState extends State<ShowtimeApp> {
         widget.showChrome && !(_layout == Fit.compact && widget.host.isHosted);
     final header = showSwitcher ? _chrome(context, persona) : null;
 
+    // Expanding is not a demo affordance — inline is where a host puts a view
+    // by default, and this is the only route out of it. Hiding it with the
+    // switcher left a compact panel with no way to reach the roomy layout,
+    // which is most of what there is to show. It costs no layout height in the
+    // app bar, so it survives where the strip does not.
+    final action = showSwitcher ? null : _expandButton(context);
+
     // The desktop *shell* is a layout, not a design language. In a slot too
     // small for it, a desktop persona gets the single-column layout — still
     // Material, still pointer-first, but it fits instead of clipping.
     return switch (persona) {
-      Persona.ios => IosShell(controller: _controller, header: header),
-      Persona.android => AndroidShell(controller: _controller, header: header),
+      Persona.ios =>
+        IosShell(controller: _controller, header: header, action: action),
+      Persona.android =>
+        AndroidShell(controller: _controller, header: header, action: action),
       Persona.desktop => _layout == Fit.roomy
           ? DesktopShell(controller: _controller, header: header)
-          : AndroidShell(controller: _controller, header: header),
+          : AndroidShell(
+              controller: _controller, header: header, action: action),
     };
+  }
+
+  /// The control that moves the view between inline and fullscreen.
+  ///
+  /// Null when the host has not offered fullscreen, so a host that cannot
+  /// grant it is never shown a button that does nothing.
+  Widget? _expandButton(BuildContext context) {
+    if (!widget.host.isHosted || !_hostContext.canGoFullscreen) return null;
+    final palette = Skin.of(context).palette;
+    final full = _hostContext.displayMode == 'fullscreen';
+    return IconButton(
+      tooltip: full ? 'Back to inline' : 'Expand',
+      iconSize: 18,
+      visualDensity: VisualDensity.compact,
+      onPressed: () async {
+        final mode =
+            await widget.host.requestDisplayMode(full ? 'inline' : 'fullscreen');
+        if (!mounted) return;
+        setState(() =>
+            _hostContext = _hostContext.merge({'displayMode': mode}));
+      },
+      icon: Icon(
+        full ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded,
+        color: palette.textSecondary,
+      ),
+    );
   }
 
   Widget _chrome(BuildContext context, Persona persona) {
@@ -259,29 +295,7 @@ class _ShowtimeAppState extends State<ShowtimeApp> {
               ),
             ),
             const SizedBox(width: 10),
-            if (widget.host.isHosted && _hostContext.canGoFullscreen)
-              IconButton(
-                tooltip: _hostContext.displayMode == 'fullscreen'
-                    ? 'Back to inline'
-                    : 'Expand',
-                iconSize: 18,
-                visualDensity: VisualDensity.compact,
-                onPressed: () async {
-                  final next = _hostContext.displayMode == 'fullscreen'
-                      ? 'inline'
-                      : 'fullscreen';
-                  final mode = await widget.host.requestDisplayMode(next);
-                  if (!mounted) return;
-                  setState(() => _hostContext =
-                      _hostContext.merge({'displayMode': mode}));
-                },
-                icon: Icon(
-                  _hostContext.displayMode == 'fullscreen'
-                      ? Icons.close_fullscreen_rounded
-                      : Icons.open_in_full_rounded,
-                  color: palette.textSecondary,
-                ),
-              ),
+            ?_expandButton(context),
             SourceBadge(
               live: widget.box.isLive,
               hostName: _hostContext.hostName,

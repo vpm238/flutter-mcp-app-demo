@@ -17,10 +17,19 @@ import 'ios_shell.dart' show TicketStub;
 import 'seat_map.dart';
 
 class AndroidShell extends StatelessWidget {
-  const AndroidShell({super.key, required this.controller, this.header});
+  const AndroidShell({
+    super.key,
+    required this.controller,
+    this.header,
+    this.action,
+  });
 
   final BookingController controller;
   final Widget? header;
+
+  /// A control for the app bar, used when the panel is too short for the
+  /// header strip but the action still has to be reachable.
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +60,7 @@ class AndroidShell extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                     color: palette.textPrimary,
                   ),
+                  actions: [?action],
                 ),
                 SliverPadding(
                   // Clearance for the pinned bar, so the last section can scroll

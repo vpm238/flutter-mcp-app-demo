@@ -250,8 +250,14 @@ async function boot() {
   bridge.onrequestdisplaymode = async ({ mode }) => {
     const granted = mode === "fullscreen" ? "fullscreen" : "inline";
     if (iframe) {
+      // Width as well as height. Claude grants fullscreen at around 1381x908
+      // on a laptop, and the two-column layout needs 820 wide before it stops
+      // being a scrollbar — so a harness that grows only the height leaves the
+      // view in the compact layout and never shows what fullscreen is for.
       iframe.style.height =
         granted === "fullscreen" ? "90vh" : `${panel().height}px`;
+      iframe.style.width =
+        granted === "fullscreen" ? "94vw" : `${panel().width}px`;
 
       // `?fullscreen=remount` models a host that presents fullscreen by
       // re-creating the frame rather than resizing it. That restarts the app

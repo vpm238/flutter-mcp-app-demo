@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +8,7 @@ import 'package:showtime/src/booking_controller.dart';
 import 'package:showtime/src/data/catalog.dart';
 import 'package:showtime/src/data/data_source.dart';
 import 'package:showtime/src/mcp/bridge.dart';
+import 'package:showtime/src/mcp/raw_bridge.dart';
 import 'package:showtime/src/theme.dart';
 import 'package:showtime/src/ui/desktop_shell.dart';
 import 'package:showtime/src/ui/seat_map.dart';
@@ -27,6 +30,7 @@ void main() {
   _layoutFit();
   _hostPalette();
   _stubPanel();
+  _expandControl();
 
   group('catalog', () {
     test('the generated house is stable for a given slot id', () {
@@ -421,6 +425,92 @@ void _stubPanel() {
       // Unhosted, so it still gets the real app: the stub is for hosts that
       // cannot be grown, and a plain web page can always scroll.
       expect(tester.takeException(), isNull);
+    });
+  });
+}
+
+/// A hosted bridge that answers `initialize` with a fixed context and records
+/// the display modes the view asks for.
+class _FakeBridge implements RawBridge {
+  _FakeBridge(this.context);
+
+  final Map<String, dynamic> context;
+  final List<String> modesRequested = [];
+
+  @override
+  Future<String> ready() async => jsonEncode({'context': context});
+
+  @override
+  Future<String> requestDisplayMode(String mode) async {
+    modesRequested.add(mode);
+    return jsonEncode({'mode': mode});
+  }
+
+  @override
+  Future<String> callTool(String name, String argsJson) async =>
+      jsonEncode({'ok': false, 'error': 'no server in this test'});
+
+  @override
+  void beacon(String stage, String note) {}
+  @override
+  void log(String level, String message) {}
+  @override
+  void onHostContext(void Function(String json) callback) {}
+  @override
+  void onToolResult(void Function(String json) callback) {}
+  @override
+  void sendMessage(String text) {}
+  @override
+  void setSize(double width, double height) {}
+  @override
+  void updateModelContext(String text) {}
+}
+
+void _expandControl() {
+  group('moving between inline and fullscreen', () {
+    // A host puts a view inline by default, and inline in Claude on a laptop
+    // is about 736px wide — under the 820 the two-column layout needs. So the
+    // roomy layout is only reachable by asking for fullscreen, and the control
+    // that asks used to live in the persona strip, which is hidden at exactly
+    // that size. The panel had no way out of the size it started in.
+    testWidgets('survives a compact panel, where it is the only way out',
+        (tester) async {
+      tester.view.physicalSize = const Size(736, 780);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final bridge = _FakeBridge({
+        'displayMode': 'inline',
+        'availableDisplayModes': ['inline', 'fullscreen'],
+      });
+      final host = await McpHost.connect(bridge: bridge);
+      expect(host.isHosted, isTrue);
+
+      await tester.pumpWidget(
+          ShowtimeApp(host: host, box: LocalBoxOffice()));
+      await tester.pumpAndSettle();
+
+      final expand = find.byIcon(Icons.open_in_full_rounded);
+      expect(expand, findsOneWidget);
+
+      await tester.tap(expand);
+      await tester.pumpAndSettle();
+      expect(bridge.modesRequested, ['fullscreen']);
+    });
+
+    testWidgets('is absent when the host does not offer fullscreen',
+        (tester) async {
+      tester.view.physicalSize = const Size(736, 780);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final host = await McpHost.connect(
+          bridge: _FakeBridge({'availableDisplayModes': ['inline']}));
+      await tester.pumpWidget(
+          ShowtimeApp(host: host, box: LocalBoxOffice()));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.open_in_full_rounded), findsNothing);
     });
   });
 }

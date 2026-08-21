@@ -15,12 +15,21 @@ import 'common.dart';
 import 'seat_map.dart';
 
 class IosShell extends StatelessWidget {
-  const IosShell({super.key, required this.controller, this.header});
+  const IosShell({
+    super.key,
+    required this.controller,
+    this.header,
+    this.action,
+  });
 
   final BookingController controller;
 
   /// The persona switcher / host badge strip, injected by the root.
   final Widget? header;
+
+  /// A control for the navigation bar, used when the panel is too short for
+  /// the header strip but the action still has to be reachable.
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +68,7 @@ class IosShell extends StatelessWidget {
                         bottom: BorderSide(color: palette.border, width: 0.5),
                       ),
                       automaticallyImplyLeading: false,
+                      trailing: action,
                     ),
                     SliverToBoxAdapter(child: _IosBody(controller: controller)),
                   ],
