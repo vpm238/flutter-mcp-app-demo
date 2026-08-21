@@ -46,6 +46,7 @@ type CallToolResult = {
 declare global {
   interface Window {
     __SHOWTIME_ORIGIN?: string;
+    __SHOWTIME_BUILD?: string;
     showtimeBridge?: unknown;
   }
 }
@@ -60,7 +61,33 @@ const FIRST_FRAME_DEADLINE_MS = 12000;
 const FRAME_DEADLINE_MS = 3500;
 
 const ORIGIN = window.__SHOWTIME_ORIGIN ?? "";
+const BUILD = window.__SHOWTIME_BUILD ?? "unknown";
 const APP_URL = `${ORIGIN}/app/`;
+
+/**
+ * Tell the server we got this far.
+ *
+ * Everything about a view that will not render is on the far side of a
+ * sandbox: no console, no network tab, and an error page that names no cause.
+ * A request arriving at our own origin is the one signal that crosses back, and
+ * `connect-src` grants it. So each step the shell reaches pings `/beacon`, and
+ * `/debug/requests` — opened in the same browser — says how far it got.
+ *
+ * If nothing is recorded, the shell never ran, and the problem is upstream of
+ * every line in this file.
+ */
+function beacon(stage: string, note?: string) {
+  try {
+    const url =
+      `${ORIGIN}/beacon?stage=${encodeURIComponent(stage)}&build=${encodeURIComponent(BUILD)}` +
+      (note ? `&note=${encodeURIComponent(note)}` : "");
+    void fetch(url, { mode: "cors", cache: "no-store" }).catch(() => {});
+  } catch {
+    // A diagnostic must never be the thing that breaks the view.
+  }
+}
+
+beacon("shell-booted");
 
 /**
  * Ways to serve the same build, in the order worth trying.
@@ -143,7 +170,7 @@ let app = makeApp();
 
 /** What the shell already knows by the time the report runs. */
 function probeContext() {
-  return { mount: chosenMount, frameAttempts };
+  return { mount: chosenMount, frameAttempts, build: BUILD };
 }
 
 /** Post a report as a turn, so it is readable by the model and not only on screen. */
@@ -501,6 +528,7 @@ if (direct) mountDirect();
 else mountNested();
 
 api.log("info", `Showtime mounting ${chosenMount}`);
+beacon("mount-chosen", chosenMount);
 
 /**
  * A blank panel is the worst outcome, because it says nothing about why. If
@@ -509,6 +537,10 @@ api.log("info", `Showtime mounting ${chosenMount}`);
  * anyone reading the transcript can see it.
  */
 setTimeout(() => {
-  if (painted) return;
+  if (painted) {
+    beacon("painted");
+    return;
+  }
+  beacon("nothing-painted", chosenMount);
   renderProbe(ORIGIN, postFindings, probeContext());
 }, FIRST_FRAME_DEADLINE_MS);

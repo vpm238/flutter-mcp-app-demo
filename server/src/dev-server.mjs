@@ -16,6 +16,12 @@ import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { handleRpc, SERVER_INFO } from "./mcp.mjs";
+import {
+  clearBeacons,
+  listBeacons,
+  recordBeacon,
+  renderBeaconPage,
+} from "./beacon-store.mjs";
 import { renderViewHtml } from "./view.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -104,6 +110,23 @@ const server = createServer(async (req, res) => {
   // The resource HTML, served directly so the dev host can iframe it.
   if (url.pathname === "/view.html") {
     return send(res, 200, { "content-type": MIME[".html"], ...CORS }, renderViewHtml({ origin }));
+  }
+
+  // Mirrors the Worker: the view pings /beacon as it reaches each step, and
+  // /debug/requests shows how far it got. Kept here too so the whole diagnostic
+  // path is exercised locally rather than first in production.
+  if (url.pathname === "/beacon") {
+    const entry = await recordBeacon(
+      { headers: { get: (k) => req.headers[k] ?? null } },
+      { stage: url.searchParams.get("stage") ?? "?", note: url.searchParams.get("note") ?? undefined },
+    );
+    return json(res, 200, { recorded: entry });
+  }
+
+  if (url.pathname === "/debug/requests") {
+    if (url.searchParams.get("clear") === "1") await clearBeacons();
+    return send(res, 200, { "content-type": MIME[".html"], ...CORS },
+      renderBeaconPage(await listBeacons()));
   }
 
   if (url.pathname === "/app") return send(res, 301, { location: "/app/" }, "");

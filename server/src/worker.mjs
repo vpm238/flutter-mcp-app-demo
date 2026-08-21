@@ -10,6 +10,12 @@
  * no CORS and run under our headers rather than the host's CSP.
  */
 
+import {
+  clearBeacons,
+  listBeacons,
+  recordBeacon,
+  renderBeaconPage,
+} from "./beacon-store.mjs";
 import { renderDiagnoseHtml } from "./diagnose.mjs";
 import { getLastInitialize, handleRpc, SERVER_INFO } from "./mcp.mjs";
 

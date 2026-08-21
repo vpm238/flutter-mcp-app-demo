@@ -13,7 +13,7 @@
  * `viewMeta` in `mcp.mjs`.
  */
 
-import { VIEW_BRIDGE_JS } from "./generated/view-bridge.mjs";
+import { VIEW_BRIDGE_JS, VIEW_BUILD_ID } from "./generated/view-bridge.mjs";
 
 export function renderViewHtml({ origin }) {
   return `<!DOCTYPE html>
@@ -38,11 +38,16 @@ export function renderViewHtml({ origin }) {
     color: color-mix(in srgb, currentColor 55%, transparent);
     pointer-events: none;
   }
+  /* Visible on purpose: if the panel shows this, the shell is running, and we
+     know which build of it — which a host that caches resources otherwise
+     makes unknowable from the outside. */
+  .build { opacity: .45; font-size: 11px; }
 </style>
 </head>
 <body>
-<div id="status">Opening the box office…</div>
-<script>window.__SHOWTIME_ORIGIN = ${jsString(origin)};</script>
+<div id="status">Opening the box office… <span class="build">${VIEW_BUILD_ID}</span></div>
+<script>window.__SHOWTIME_ORIGIN = ${jsString(origin)};
+window.__SHOWTIME_BUILD = ${jsString(VIEW_BUILD_ID)};</script>
 <script>${inlineScript(VIEW_BRIDGE_JS)}</script>
 </body>
 </html>`;
