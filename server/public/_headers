@@ -2,12 +2,24 @@
 # path matches a file, so the Worker's own header wrapping never executes for
 # these. This file is the only thing that sets headers on them.
 #
-# Why they matter: the view runs in a frame sandboxed without
-# `allow-same-origin`, so its document has an opaque origin and its own
-# subresource fetches — CanvasKit, the fonts — arrive as cross-origin requests
-# with `Origin: null`. Without these, Flutter never gets a renderer and the
-# frame stays blank.
+# All three matter, and none of them are optional:
+#
+# Access-Control-Allow-Origin
+#   The view runs in a frame sandboxed without `allow-same-origin`, so its
+#   document has an opaque origin and its own subresource fetches — CanvasKit,
+#   the fonts — arrive as cross-origin requests with `Origin: null`.
+#
+# Cross-Origin-Resource-Policy
+#   Lets those same subresources load when the embedder sets COEP.
+#
+# Cross-Origin-Embedder-Policy
+#   The host frame sets `require-corp`, and under that a nested *cross-origin
+#   frame* must send COEP itself — CORP covers subresources, not documents.
+#   Without it the browser refuses the frame outright with
+#   ERR_BLOCKED_BY_RESPONSE, which the user sees as
+#   "This content is blocked. Contact the site owner to fix the issue."
 
 /app/*
   Access-Control-Allow-Origin: *
   Cross-Origin-Resource-Policy: cross-origin
+  Cross-Origin-Embedder-Policy: require-corp

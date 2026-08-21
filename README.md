@@ -85,11 +85,17 @@ Sandbox flags *do* inherit, so the inner frame runs `allow-scripts` **without**
 
 - Its own fetches for `canvaskit.wasm` and the fonts go out as `Origin: null`,
   so those assets need `Access-Control-Allow-Origin: *` and
-  `Cross-Origin-Resource-Policy: cross-origin`. They come from
-  `server/public/_headers`, not from the Worker: Cloudflare serves a matched
-  asset *before* the Worker runs, so Worker code never sees those requests.
-  Local dev sets the same headers itself, which is exactly why this one has to
-  be tested rather than eyeballed.
+  `Cross-Origin-Resource-Policy: cross-origin`.
+- The host frame sets `Cross-Origin-Embedder-Policy: require-corp`, and under
+  that a nested **cross-origin frame must send COEP itself** — CORP covers
+  subresources, not documents. Without it the browser refuses the frame with
+  `ERR_BLOCKED_BY_RESPONSE`, which shows up as *"This content is blocked."*
+
+All three come from `server/public/_headers`, not from the Worker: Cloudflare
+serves a matched asset *before* the Worker runs, so Worker code never sees
+those requests. The dev server mirrors the same headers deliberately — when it
+was more permissive than production, both of these bugs were invisible until
+the thing was live inside a real host.
 - `history.replaceState` throws `SecurityError` in an opaque origin and Flutter's
   default URL strategy calls it on boot, so `main()` does `setUrlStrategy(null)`.
 

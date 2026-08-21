@@ -49,6 +49,19 @@ const CORS = {
     "content-type, authorization, mcp-session-id, mcp-protocol-version, accept",
 };
 
+/**
+ * What `public/_headers` sets on the deployed assets. Mirrored here so the
+ * embedding rules are the same locally — a host frame with
+ * `Cross-Origin-Embedder-Policy: require-corp` blocks a nested cross-origin
+ * frame that does not send COEP itself, and that failure is invisible if the
+ * dev server is more permissive than production.
+ */
+const ASSET_HEADERS = {
+  "access-control-allow-origin": "*",
+  "cross-origin-resource-policy": "cross-origin",
+  "cross-origin-embedder-policy": "require-corp",
+};
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host ?? `${HOST}:${PORT}`}`);
   const origin = url.origin;
@@ -126,7 +139,7 @@ function serveStatic(res, root, pathname) {
   res.writeHead(200, {
     "content-type": MIME[extname(filePath)] ?? "application/octet-stream",
     "cache-control": "no-cache",
-    ...CORS,
+    ...ASSET_HEADERS,
   });
   createReadStream(filePath).pipe(res);
 }

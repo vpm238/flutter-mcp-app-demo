@@ -238,4 +238,7 @@ test("static assets carry the headers the sandboxed frame needs", () => {
   assert.ok(rule, "no /app/* rule in public/_headers");
   assert.match(rule, /Access-Control-Allow-Origin:\s*\*/i);
   assert.match(rule, /Cross-Origin-Resource-Policy:\s*cross-origin/i);
+  // Without COEP the browser refuses the frame outright under a
+  // `require-corp` embedder — CORP covers subresources, not documents.
+  assert.match(rule, /Cross-Origin-Embedder-Policy:\s*require-corp/i);
 });
